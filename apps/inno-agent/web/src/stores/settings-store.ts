@@ -1,0 +1,327 @@
+import { EventEmitter } from "./event-emitter.js";
+import { getSettings, switchBackendModel, upsertProvider, deleteProviderApi, deleteModelApi, saveChannelsSettings, saveMemorySettings, savePermissionMode as savePermissionModeApi, saveComputerUseSettings, saveCodemodeSettings, saveSmartInputSettings, saveMcpSettings, saveCloseBehavior, saveMarkdownSettings, saveGithubSettings, saveOcrSettings, saveTavilySettings, saveContentHubSettings, type MemorySettingsPatch, type ContentHubPayload, type OcrSettingsPayload } from "../api/settings.js";
+import type { WindowCloseBehavior, PermissionPolicyMode } from "../types/settings.js";
+import type { InnoSettings, SmartInputSettings, UpsertProviderRequest, ChannelsSettingsPayload } from "../types/settings.js";
+
+interface SettingsStoreEvents {
+	change: void;
+}
+
+class SettingsStoreImpl extends EventEmitter<SettingsStoreEvents> {
+	settings: InnoSettings | null = null;
+	isLoading = false;
+	isSavingModel = false;
+	isSavingProvider = false;
+	isSavingChannels = false;
+	isSavingMemory = false;
+	isSavingGithub = false;
+	isSavingOcr = false;
+	isSavingTavily = false;
+	isSavingContentHub = false;
+	isSavingPermissionMode = false;
+	isSavingComputerUse = false;
+	isSavingCodemode = false;
+	isSavingSmartInput = false;
+	isSavingMcp = false;
+	isSavingCloseBehavior = false;
+	isSavingMarkdown = false;
+	error: string | null = null;
+
+	async load(): Promise<void> {
+		this.isLoading = true;
+		this.error = null;
+		this.emit("change", undefined);
+		try {
+			this.settings = await getSettings();
+		} catch (err) {
+			this.settings = null;
+			this.error = err instanceof Error ? err.message : "Failed to load settings";
+		} finally {
+			this.isLoading = false;
+			this.emit("change", undefined);
+		}
+	}
+
+	async switchModel(provider: string, model: string): Promise<void> {
+		this.isSavingModel = true;
+		this.error = null;
+		this.emit("change", undefined);
+		try {
+			const timeout = new Promise<never>((_, reject) =>
+				setTimeout(() => reject(new Error("Switch model timed out")), 10_000),
+			);
+			const next = await Promise.race([switchBackendModel(provider, model), timeout]);
+			if (this.settings) {
+				this.settings = {
+					...this.settings,
+					defaultProvider: next.defaultProvider,
+					defaultModel: next.defaultModel,
+				};
+			}
+			await this.load();
+		} catch (err) {
+			this.error = err instanceof Error ? err.message : "Failed to switch model";
+			this.emit("change", undefined);
+		} finally {
+			this.isSavingModel = false;
+			this.emit("change", undefined);
+		}
+	}
+
+	async saveProvider(payload: UpsertProviderRequest): Promise<void> {
+		this.isSavingProvider = true;
+		this.error = null;
+		this.emit("change", undefined);
+		try {
+			this.settings = await upsertProvider(payload);
+			await this.load();
+		} catch (err) {
+			this.error = err instanceof Error ? err.message : "Failed to save provider";
+			this.emit("change", undefined);
+		} finally {
+			this.isSavingProvider = false;
+			this.emit("change", undefined);
+		}
+	}
+
+	async deleteProvider(providerId: string): Promise<void> {
+		this.isSavingProvider = true;
+		this.error = null;
+		this.emit("change", undefined);
+		try {
+			this.settings = await deleteProviderApi(providerId);
+			await this.load();
+		} catch (err) {
+			this.error = err instanceof Error ? err.message : "Failed to delete provider";
+			this.emit("change", undefined);
+		} finally {
+			this.isSavingProvider = false;
+			this.emit("change", undefined);
+		}
+	}
+
+	async deleteModel(providerId: string, modelId: string): Promise<void> {
+		this.isSavingProvider = true;
+		this.error = null;
+		this.emit("change", undefined);
+		try {
+			this.settings = await deleteModelApi(providerId, modelId);
+			await this.load();
+		} catch (err) {
+			this.error = err instanceof Error ? err.message : "Failed to delete model";
+			this.emit("change", undefined);
+		} finally {
+			this.isSavingProvider = false;
+			this.emit("change", undefined);
+		}
+	}
+
+	async saveChannels(payload: ChannelsSettingsPayload): Promise<void> {
+		this.isSavingChannels = true;
+		this.error = null;
+		this.emit("change", undefined);
+		try {
+			this.settings = await saveChannelsSettings(payload);
+		} catch (err) {
+			this.error = err instanceof Error ? err.message : "Failed to save channels";
+			this.emit("change", undefined);
+		} finally {
+			this.isSavingChannels = false;
+			this.emit("change", undefined);
+		}
+	}
+
+	async saveMemory(patch: MemorySettingsPatch): Promise<void> {
+		this.isSavingMemory = true;
+		this.error = null;
+		this.emit("change", undefined);
+		try {
+			this.settings = await saveMemorySettings(patch);
+		} catch (err) {
+			this.error = err instanceof Error ? err.message : "Failed to save memory settings";
+			this.emit("change", undefined);
+			throw err;
+		} finally {
+			this.isSavingMemory = false;
+			this.emit("change", undefined);
+		}
+	}
+
+	async saveComputerUse(enabled: boolean): Promise<void> {
+		this.isSavingComputerUse = true;
+		this.error = null;
+		this.emit("change", undefined);
+		try {
+			this.settings = await saveComputerUseSettings(enabled);
+		} catch (err) {
+			this.error = err instanceof Error ? err.message : "Failed to save computer-use setting";
+			this.emit("change", undefined);
+			throw err;
+		} finally {
+			this.isSavingComputerUse = false;
+			this.emit("change", undefined);
+		}
+	}
+
+	async saveCodemode(enabled: boolean): Promise<void> {
+		this.isSavingCodemode = true;
+		this.error = null;
+		this.emit("change", undefined);
+		try {
+			this.settings = await saveCodemodeSettings(enabled);
+		} catch (err) {
+			this.error = err instanceof Error ? err.message : "Failed to save codemode setting";
+			this.emit("change", undefined);
+			throw err;
+		} finally {
+			this.isSavingCodemode = false;
+			this.emit("change", undefined);
+		}
+	}
+
+	async savePermissionMode(mode: PermissionPolicyMode): Promise<void> {
+		this.isSavingPermissionMode = true;
+		this.error = null;
+		this.emit("change", undefined);
+		try {
+			this.settings = await savePermissionModeApi(mode);
+		} catch (err) {
+			this.error = err instanceof Error ? err.message : "Failed to save permission mode";
+			this.emit("change", undefined);
+			throw err;
+		} finally {
+			this.isSavingPermissionMode = false;
+			this.emit("change", undefined);
+		}
+	}
+
+	async saveSmartInput(payload: SmartInputSettings): Promise<void> {
+		this.isSavingSmartInput = true;
+		this.error = null;
+		this.emit("change", undefined);
+		try {
+			this.settings = await saveSmartInputSettings(payload);
+		} catch (err) {
+			this.error = err instanceof Error ? err.message : "Failed to save smart input settings";
+			this.emit("change", undefined);
+			throw err;
+		} finally {
+			this.isSavingSmartInput = false;
+			this.emit("change", undefined);
+		}
+	}
+
+	async saveMcp(enabled: boolean): Promise<void> {
+		this.isSavingMcp = true;
+		this.error = null;
+		this.emit("change", undefined);
+		try {
+			this.settings = await saveMcpSettings(enabled);
+		} catch (err) {
+			this.error = err instanceof Error ? err.message : "Failed to save MCP setting";
+			this.emit("change", undefined);
+			throw err;
+		} finally {
+			this.isSavingMcp = false;
+			this.emit("change", undefined);
+		}
+	}
+
+	async saveCloseBehavior(closeBehavior: WindowCloseBehavior): Promise<void> {
+		this.isSavingCloseBehavior = true;
+		this.error = null;
+		this.emit("change", undefined);
+		try {
+			this.settings = await saveCloseBehavior(closeBehavior);
+		} catch (err) {
+			this.error = err instanceof Error ? err.message : "Failed to save close behavior";
+			this.emit("change", undefined);
+			throw err;
+		} finally {
+			this.isSavingCloseBehavior = false;
+			this.emit("change", undefined);
+		}
+	}
+
+	async saveMathSingleDollar(enabled: boolean): Promise<void> {
+		this.isSavingMarkdown = true;
+		this.error = null;
+		this.emit("change", undefined);
+		try {
+			this.settings = await saveMarkdownSettings(enabled);
+		} catch (err) {
+			this.error = err instanceof Error ? err.message : "Failed to save Markdown settings";
+			this.emit("change", undefined);
+			throw err;
+		} finally {
+			this.isSavingMarkdown = false;
+			this.emit("change", undefined);
+		}
+	}
+
+	async saveGithub(token: string): Promise<void> {
+		this.isSavingGithub = true;
+		this.error = null;
+		this.emit("change", undefined);
+		try {
+			this.settings = await saveGithubSettings(token);
+		} catch (err) {
+			this.error = err instanceof Error ? err.message : "Failed to save GitHub settings";
+			this.emit("change", undefined);
+			throw err;
+		} finally {
+			this.isSavingGithub = false;
+			this.emit("change", undefined);
+		}
+	}
+
+	async saveOcr(payload: OcrSettingsPayload): Promise<void> {
+		this.isSavingOcr = true;
+		this.error = null;
+		this.emit("change", undefined);
+		try {
+			this.settings = await saveOcrSettings(payload);
+		} catch (err) {
+			this.error = err instanceof Error ? err.message : "Failed to save OCR settings";
+			this.emit("change", undefined);
+			throw err;
+		} finally {
+			this.isSavingOcr = false;
+			this.emit("change", undefined);
+		}
+	}
+
+	async saveTavily(apiKey: string): Promise<void> {
+		this.isSavingTavily = true;
+		this.error = null;
+		this.emit("change", undefined);
+		try {
+			this.settings = await saveTavilySettings(apiKey);
+		} catch (err) {
+			this.error = err instanceof Error ? err.message : "Failed to save Tavily settings";
+			this.emit("change", undefined);
+			throw err;
+		} finally {
+			this.isSavingTavily = false;
+			this.emit("change", undefined);
+		}
+	}
+
+	async saveContentHub(payload: ContentHubPayload): Promise<void> {
+		this.isSavingContentHub = true;
+		this.error = null;
+		this.emit("change", undefined);
+		try {
+			this.settings = await saveContentHubSettings(payload);
+		} catch (err) {
+			this.error = err instanceof Error ? err.message : "Failed to save content hub settings";
+			this.emit("change", undefined);
+			throw err;
+		} finally {
+			this.isSavingContentHub = false;
+			this.emit("change", undefined);
+		}
+	}
+}
+
+export const settingsStore = new SettingsStoreImpl();

@@ -1,0 +1,2 @@
+import {it,expect} from 'vitest';import {dictationLinks} from './ChatDictationLinks.js';
+it('finds a shortcut only from a successful saved dictation result',()=>{const id='11111111-1111-4111-8111-111111111111',tools=[{toolCallId:'1',toolName:'student_dictation_create',args:{},result:{content:[{type:'text',text:JSON.stringify({dictationId:id,title:'Words'})}]}}];expect(dictationLinks(tools)).toEqual([{id,title:'Words'}]);expect(dictationLinks([{...tools[0],isError:true}])).toEqual([]);expect(dictationLinks([{...tools[0],result:'{"dictationId":"not-an-id"}'}])).toEqual([]);});

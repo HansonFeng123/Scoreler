@@ -1,0 +1,3 @@
+import {it,expect} from 'vitest';import {newestFirst} from './newestFirst.js';
+it('orders generated items newest first without mutating records or promoting old edits',()=>{const items=[{id:'old',createdAt:'2026-10-01T10:00:00Z',updatedAt:'2026-10-22T10:00:00Z'},{id:'new',createdAt:'2026-10-20T10:00:00Z'},{id:'unknown',createdAt:'invalid'}];expect(newestFirst(items).map(i=>i.id)).toEqual(['new','old','unknown']);expect(items[0].id).toBe('old');});
+it('orders memory facts by their update timestamp when no creation time exists',()=>{expect(newestFirst([{key:'old',updatedAt:'2026-10-01T10:00:00Z'},{key:'new',updatedAt:'2026-10-20T10:00:00Z'}]).map(i=>i.key)).toEqual(['new','old']);});

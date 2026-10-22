@@ -1,0 +1,5 @@
+import {it,expect} from 'vitest';import {dayBlocks} from './calendarDayLayout.js';import type {StudyEvent} from '../../../src/scoreler/store.js';
+const day=new Date(2026,9,19);const event=(id:string,start:number,end:number):StudyEvent=>({id,title:id,subject:'Chemistry',kind:'lesson',completed:false,start:new Date(2026,9,19,0,start).toISOString(),end:new Date(2026,9,19,0,end).toISOString()});
+it('positions events by wall-clock time and preserves duration ratios',()=>{const b=dayBlocks([event('short',480,510),event('long',600,660)],day);expect(b[0].start).toBe(480);expect(b[1].end-b[1].start).toBe(2*(b[0].end-b[0].start));});
+it('allocates columns for overlaps but gives adjacent events full width',()=>{const b=dayBlocks([event('a',480,540),event('b',510,570),event('c',570,600)],day);expect(b[0].columns).toBe(2);expect(b[1].column).toBe(1);expect(b[2].columns).toBe(1);});
+it('clips midnight-spanning events at the selected day boundaries',()=>{const b=dayBlocks([event('night',-30,30),event('late',1410,1470)],day);expect(b.map(x=>[x.start,x.end])).toEqual([[0,30],[1410,1440]]);});

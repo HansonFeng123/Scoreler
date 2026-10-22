@@ -1,0 +1,154 @@
+import type { SessionContextUsage } from "../../../src/shared/context-usage.js";
+import { apiFetch } from "./client.js";
+import type { ChatMessage } from "../types/chat.js";
+
+export type SessionChannel = "cli" | "web" | "feishu" | "qq" | "wechat" | "scheduler" | "unknown";
+
+export interface SessionMeta {
+	id: string;
+	name: string;
+	createdAt: string;
+	updatedAt: string;
+	messageCount: number;
+	preview: string;
+	channels: SessionChannel[];
+	/** Immutable birthplace of the session (web/cli/feishu/wechat/scheduler). */
+	origin?: SessionChannel;
+	archived?: boolean;
+	/** True once a topic (manual or auto-generated) has been recorded server-side. */
+	hasTopic?: boolean;
+	/** True while an auto-generated preview is waiting for its richer summary. */
+	topicPendingUpgrade?: boolean;
+}
+
+export interface PendingQuestionData {
+	questionId: string;
+	sessionId: string;
+	turnId: string;
+	params: unknown;
+	createdAt: string;
+}
+
+export interface SessionDetail extends SessionMeta {
+	messages: ChatMessage[];
+	messageCount: number;
+	sessionRevision: string;
+	/** A pending question card restored from server-side persistence (e.g.
+	 *  after a process restart killed the in-memory turn). */
+	pendingQuestion?: PendingQuestionData;
+}
+
+export interface SessionActivationResult {
+	id: string;
+	active: boolean;
+}
+
+export interface NewSessionResult {
+	id: string;
+	active: boolean;
+	workspaceId?: string;
+}
+
+export interface CreateSessionInput {
+	workspaceId?: string;
+	newWorkspace?: {
+		name?: string;
+		isTemp?: boolean;
+	};
+	/** Instantiate a bundled preset into a fresh workspace and bind to it. Takes precedence over the other fields. */
+	presetId?: string;
+}
+
+export async function listSessions(): Promise<SessionMeta[]> {
+	return apiFetch<SessionMeta[]>("/api/sessions");
+}
+
+export async function getSession(id: string): Promise<SessionDetail> {
+	return apiFetch<SessionDetail>(`/api/sessions/${encodeURIComponent(id)}`);
+}
+
+export async function activateSession(id: string): Promise<SessionActivationResult> {
+	return apiFetch<SessionActivationResult>(`/api/sessions/${encodeURIComponent(id)}/activate`, {
+		method: "POST",
+	});
+}
+
+export interface SessionBranchResult {
+	sessionId: string;
+	replacedEntryId: string;
+	branchMarkerId: string;
+	sessionRevision: string;
+}
+
+export async function branchSessionBeforeMessage(id: string, entryId: string): Promise<SessionBranchResult> {
+	return apiFetch<SessionBranchResult>(`/api/sessions/${encodeURIComponent(id)}/branch-before-message`, {
+		method: "POST",
+		body: JSON.stringify({ entryId }),
+	});
+}
+
+export async function createSession(input: CreateSessionInput = {}): Promise<NewSessionResult> {
+	return apiFetch<NewSessionResult>("/api/sessions", {
+		method: "POST",
+		body: JSON.stringify(input),
+	});
+}
+
+export async function updateSessionName(id: string, name: string, generated = false): Promise<SessionMeta> {
+	return apiFetch<SessionMeta>(`/api/sessions/${encodeURIComponent(id)}`, {
+		method: "PATCH",
+		body: JSON.stringify({ name, generated }),
+	});
+}
+
+export async function generateSessionName(id: string): Promise<SessionMeta> {
+	return apiFetch<SessionMeta>(`/api/sessions/${encodeURIComponent(id)}/generate-topic`, {
+		method: "POST",
+	});
+}
+
+export interface ShowcaseExportResult {
+	ok: boolean;
+	caseId: string;
+	title: string;
+	/** Server-side dir the case JSON + assets + index.json were written to. */
+	casesDir: string;
+}
+
+export async function exportSessionShowcase(id: string): Promise<ShowcaseExportResult> {
+	return apiFetch<ShowcaseExportResult>(`/api/sessions/${encodeURIComponent(id)}/showcase-export`, {
+		method: "POST",
+	});
+}
+
+export interface DeleteSessionResult {
+	id: string;
+	deleted: boolean;
+	newActiveId: string | null;
+}
+
+export async function deleteSession(id: string): Promise<DeleteSessionResult> {
+	return apiFetch<DeleteSessionResult>(`/api/sessions/${encodeURIComponent(id)}`, {
+		method: "DELETE",
+	});
+}
+
+export async function archiveSession(id: string): Promise<{ id: string; archived: boolean }> {
+	return apiFetch<{ id: string; archived: boolean }>(`/api/sessions/${encodeURIComponent(id)}/archive`, {
+		method: "POST",
+	});
+}
+
+export async function unarchiveSession(id: string): Promise<{ id: string; archived: boolean }> {
+	return apiFetch<{ id: string; archived: boolean }>(`/api/sessions/${encodeURIComponent(id)}/unarchive`, {
+		method: "POST",
+	});
+}
+
+export type { SessionContextUsage } from "../../../src/shared/context-usage.js";
+
+export async function fetchSessionContextUsage(id: string, signal?: AbortSignal) {
+	return apiFetch<SessionContextUsage>(
+		`/api/sessions/${encodeURIComponent(id)}/context-usage`, { signal },
+	);
+}

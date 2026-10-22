@@ -1,0 +1,7 @@
+import {useEffect,useState} from 'react';import {Bot} from 'lucide-react';
+export interface CompanionPreferences{enabled:boolean;style:'toolbar'|'cyber'|'pixel';locale?:string}
+export function CompanionSettings({en,notice}:{en:boolean;notice:(message:string)=>void}){const [prefs,setPrefs]=useState<CompanionPreferences|null>(null),[busy,setBusy]=useState(false);const api=window.scorelerDesktop;
+ useEffect(()=>{if(api?.getCompanion)void api.getCompanion().then(setPrefs).catch(e=>notice(String(e)));},[]);
+ if(!api?.setCompanion||!prefs)return null;const update=async(patch:Partial<CompanionPreferences>)=>{setBusy(true);try{setPrefs(await api.setCompanion!({...patch,locale:en?'en':'zh-CN'}));}catch(e){notice(String(e));}finally{setBusy(false);}};
+ return <section className="panel settings-section"><h2><Bot size={18}/>{en?'Desktop companion':'桌面伙伴'}</h2><p>{en?'A small draggable companion with your next reminder. Quick questions open in the study assistant.':'可拖动的小伙伴，显示下一项日程提醒。快捷提问将在学习助手中回答。'}</p><label className="checkbox-label"><input type="checkbox" disabled={busy} checked={prefs.enabled} onChange={e=>void update({enabled:e.target.checked})}/>{en?'Show desktop companion':'显示桌面伙伴'}</label><p className="quiet-note">{en?'Drag the character to move it. Hide with −; restore here or from the tray menu. Closing the main window keeps the companion running; use Quit in the tray to exit.':'拖动角色可移动位置。点击 − 隐藏，可在这里或托盘菜单重新显示。关闭主窗口后伙伴仍会运行；退出应用请使用托盘菜单。'}</p></section>;
+}

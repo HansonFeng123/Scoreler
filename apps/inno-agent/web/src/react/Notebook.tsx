@@ -1,0 +1,198 @@
+import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { Network, FileText, PanelLeftClose, PanelLeftOpen, Trash2, ClipboardCheck } from "lucide-react";
+import { notebookStore } from "../stores/notebook-store.js";
+import type { WikiPageType } from "../types/wiki.js";
+import { useStoreSnapshot } from "./hooks.js";
+import { GraphView } from "./notebook/GraphView.js";
+import { PageView } from "./notebook/PageView.js";
+import { ReviewView } from "./notebook/ReviewView.js";
+
+const FILTER_TYPES: (WikiPageType | "all")[] = ["all", "source", "entity", "concept", "query", "comparison", "synthesis", "analysis"];
+
+function typeColor(type?: WikiPageType): string {
+	switch (type) {
+		case "source":
+		case "source-summary":
+			return "bg-[var(--inno-accent-soft)] text-[var(--inno-accent)]";
+		case "entity":
+			return "bg-[var(--inno-success-bg)] text-[var(--inno-success)]";
+		case "concept":
+			return "bg-[var(--inno-warning-bg)] text-[var(--inno-warning)]";
+		case "query":
+		case "comparison":
+		case "synthesis":
+		case "analysis":
+			return "bg-[var(--inno-accent-soft)] text-[var(--inno-accent)]";
+		default:
+			return "bg-[var(--inno-surface-muted)] text-[var(--inno-text-muted)]";
+	}
+}
+
+export function Notebook() {
+	const { t } = useTranslation();
+	const [sidebarOpen, setSidebarOpen] = useState(
+		() => typeof window === "undefined" || !window.matchMedia("(max-width: 767px)").matches,
+	);
+	const state = useStoreSnapshot(notebookStore, () => ({
+		pages: notebookStore.filteredPages,
+		filterType: notebookStore.filterType,
+		searchQuery: notebookStore.searchQuery,
+		view: notebookStore.view,
+		currentPagePath: notebookStore.currentPage?.path ?? null,
+		selectedNodeId: notebookStore.selectedNodeId,
+		reviews: notebookStore.reviews,
+		isLoadingPages: notebookStore.isLoadingPages,
+		isDeletingPage: notebookStore.isDeletingPage,
+	}));
+
+	async function handleDelete(path: string, title: string) {
+		const ok = window.confirm(t("notebook.delete.confirm", { title }));
+		if (!ok) return;
+		try {
+			await notebookStore.deletePage(path);
+		} catch {
+			// store logs the error; nothing else to do
+		}
+	}
+
+	useEffect(() => {
+		void notebookStore.loadAll();
+	}, []);
+
+	useEffect(() => {
+		const narrowScreen = window.matchMedia("(max-width: 767px)");
+		const closeSidebarOnNarrowScreen = (event: MediaQueryListEvent) => {
+			if (event.matches) setSidebarOpen(false);
+		};
+		narrowScreen.addEventListener("change", closeSidebarOnNarrowScreen);
+		return () => narrowScreen.removeEventListener("change", closeSidebarOnNarrowScreen);
+	}, []);
+
+	return (
+		<div className={`relative grid h-full min-h-0 gap-4 p-5 transition-[grid-template-columns] duration-200 max-md:grid-cols-[minmax(0,1fr)] ${sidebarOpen ? "grid-cols-[260px_minmax(0,1fr)]" : "grid-cols-[0px_minmax(0,1fr)]"}`}>
+			<aside className={`flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-[var(--inno-border)] bg-[var(--inno-card-bg)] transition-opacity duration-200 max-md:absolute max-md:inset-3 max-md:z-20 ${sidebarOpen ? "opacity-100" : "pointer-events-none opacity-0 max-md:hidden"}`}>
+				<div className="flex gap-2 border-b border-[var(--inno-border)] p-2">
+					<input
+						type="text"
+						className="min-w-0 flex-1 rounded-lg border border-[var(--inno-border)] bg-[var(--inno-surface)] px-3 py-1.5 text-sm focus-visible:border-[var(--inno-focus-border)] focus-visible:outline-none focus-visible:shadow-[var(--inno-ring)]"
+						placeholder={t("notebook.search") ?? ""}
+						value={state.searchQuery}
+						onChange={(event) => notebookStore.setSearchQuery(event.target.value)}
+					/>
+					<button
+						type="button"
+						className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-md text-[var(--inno-text-subtle)] hover:bg-[var(--inno-surface-muted)] hover:text-[var(--inno-text)] max-md:flex"
+						onClick={() => setSidebarOpen(false)}
+						title={t("common.collapseSidebar", "Collapse sidebar")}
+					>
+						<PanelLeftClose size={16} />
+					</button>
+				</div>
+				<div className="flex flex-wrap gap-1 border-b border-[var(--inno-border)] px-2 py-2">
+					{FILTER_TYPES.map((type) => (
+						<button
+							key={type}
+							className={`rounded-full px-2 py-0.5 text-xs transition-colors ${
+								state.filterType === type
+									? "bg-[var(--inno-accent-soft)] text-[var(--inno-accent)]"
+									: "bg-[var(--inno-surface-muted)] text-[var(--inno-text-muted)] hover:bg-[var(--inno-surface-muted)] hover:text-[var(--inno-text)]"
+							}`}
+							onClick={() => notebookStore.setFilterType(type)}
+						>
+							{t(`notebook.filter.${type}`, { defaultValue: type })}
+						</button>
+					))}
+				</div>
+				<div className="min-h-0 flex-1 overflow-y-auto p-2">
+					{state.pages.length === 0 ? (
+						<p className="p-4 text-center text-sm text-[var(--inno-text-muted)]">{t("notebook.noPages")}</p>
+					) : null}
+					<div className="flex flex-col gap-2">
+						{state.pages.map((page) => {
+							const selected = state.currentPagePath === page.path || state.selectedNodeId === page.path;
+							const title = page.frontmatter?.title || page.path;
+							return (
+								<div
+									key={page.path}
+									className={`group relative rounded-[14px] border transition-shadow hover:shadow-[var(--inno-shadow-soft)] ${selected ? "border-[var(--inno-accent)] bg-[var(--inno-accent-soft)]" : "border-[var(--inno-border)] bg-[var(--inno-card-bg)]"}`}
+								>
+									<button
+										className="w-full px-[15px] py-[13px] pr-9 text-left text-sm"
+										onClick={() => void notebookStore.selectPage(page.path)}
+									>
+										<div className="truncate text-[13.5px] font-medium text-[var(--inno-text)]">{title}</div>
+										<div className="mt-1.5 flex items-center gap-1.5">
+											<span className={`rounded px-1.5 text-xs ${typeColor(page.frontmatter?.type)}`}>
+												{page.frontmatter?.type ? t(`notebook.types.${page.frontmatter.type}`, { defaultValue: page.frontmatter.type }) : t("notebook.types.unknown")}
+											</span>
+											<span className="truncate text-[11.5px] text-[var(--inno-text-subtle)]">{page.frontmatter?.updated || ""}</span>
+										</div>
+									</button>
+									<button
+										className={`absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded text-[var(--inno-text-muted)] hover:bg-[var(--inno-danger-bg)] hover:text-[var(--inno-danger)] disabled:opacity-50 ${state.isDeletingPage ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+										title={t("notebook.delete.button")}
+										disabled={state.isDeletingPage}
+										onClick={(e) => {
+											e.stopPropagation();
+											void handleDelete(page.path, title);
+										}}
+									>
+										<Trash2 size={14} />
+									</button>
+								</div>
+							);
+						})}
+					</div>
+				</div>
+			</aside>
+
+			<section className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-[var(--inno-border)] bg-[var(--inno-card-bg)] max-md:col-start-1 max-md:row-start-1">
+				<div className="@container flex items-center gap-2 border-b border-[var(--inno-border)] px-3">
+					<button
+						className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[var(--inno-text-subtle)] hover:bg-[var(--inno-surface-muted)] hover:text-[var(--inno-text)]"
+						onClick={() => setSidebarOpen((v) => !v)}
+						title={sidebarOpen ? t("common.collapseSidebar", "Collapse sidebar") : t("common.expandSidebar", "Expand sidebar")}
+					>
+						{sidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
+					</button>
+					<div className="flex min-w-0 gap-1">
+						<button
+							className={`inline-flex items-center gap-1.5 border-b-2 px-3.5 py-2.5 text-[13.5px] ${state.view === "page" ? "border-[var(--inno-accent)] font-medium text-[var(--inno-accent)]" : "border-transparent text-[var(--inno-text-muted)] hover:text-[var(--inno-text)]"}`}
+							onClick={() => notebookStore.setView("page")}
+							title={t("notebook.view.page")}
+						>
+							<FileText size={14} />
+							<span className="hidden @[680px]:inline">{t("notebook.view.page")}</span>
+						</button>
+						<button
+							className={`inline-flex items-center gap-1.5 border-b-2 px-3.5 py-2.5 text-[13.5px] ${state.view === "graph" ? "border-[var(--inno-accent)] font-medium text-[var(--inno-accent)]" : "border-transparent text-[var(--inno-text-muted)] hover:text-[var(--inno-text)]"}`}
+							onClick={() => notebookStore.setView("graph")}
+							title={t("notebook.view.graph")}
+						>
+							<Network size={14} />
+							<span className="hidden @[680px]:inline">{t("notebook.view.graph")}</span>
+						</button>
+						<button
+							className={`inline-flex items-center gap-1.5 border-b-2 px-3.5 py-2.5 text-[13.5px] ${state.view === "reviews" ? "border-[var(--inno-accent)] font-medium text-[var(--inno-accent)]" : "border-transparent text-[var(--inno-text-muted)] hover:text-[var(--inno-text)]"}`}
+							onClick={() => notebookStore.setView("reviews")}
+							title={t("notebook.reviews.title")}
+						>
+							<ClipboardCheck size={14} />
+							<span className="hidden @[680px]:inline">{t("notebook.reviews.title")}</span>
+							{state.reviews.length > 0 ? <span className="text-[10px]">{state.reviews.length}</span> : null}
+						</button>
+					</div>
+					<div className="ml-auto truncate pl-2 text-xs text-[var(--inno-text-subtle)]">{state.currentPagePath ?? ""}</div>
+				</div>
+				<div className={`min-h-0 flex-1 ${state.view === "graph" ? "overflow-hidden" : "overflow-auto"}`}>
+					{state.view === "graph"
+						? <GraphView />
+						: state.view === "reviews"
+							? <ReviewView reviews={state.reviews} onOpenPage={(path) => void notebookStore.selectPage(path)} />
+							: <PageView />}
+				</div>
+			</section>
+		</div>
+	);
+}

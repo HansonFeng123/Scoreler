@@ -1,0 +1,6 @@
+import type {ChatMessage} from '../types/chat.js';import type {TeachingVideo} from '../../../src/scoreler/video-types.js';
+function resultId(value:unknown):string|undefined{if(typeof value==='string'){try{return resultId(JSON.parse(value));}catch{return;}}if(!value||typeof value!=='object')return;const record=value as Record<string,unknown>;if(typeof record.id==='string')return record.id;if(record.details){const id=resultId(record.details);if(id)return id;}if(Array.isArray(record.content))for(const part of record.content){const id=resultId(part?.text);if(id)return id;}return;}
+export function videosByMessage(messages:ChatMessage[],videos:TeachingVideo[]){const groups=new Map<number,TeachingVideo[]>();for(const video of videos){let index=messages.findIndex(m=>m.tools?.some(t=>t.toolName==='student_video_generate'&&!t.isError&&resultId(t.result)===video.id));if(index<0){const created=Date.parse(video.createdAt);for(let i=0;i<messages.length;i++)if(messages[i].role==='user'&&messages[i].timestamp<=created)index=i;if(index<0)index=messages.findIndex(m=>m.role==='assistant');if(index<0)index=0;}
+ // Place it after the final assistant message in its original request turn.
+ for(let i=index+1;i<messages.length&&messages[i].role!=='user';i++)if(messages[i].role==='assistant')index=i;
+ groups.set(index,[...(groups.get(index)??[]),video]);}return groups;}

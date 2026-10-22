@@ -1,0 +1,3 @@
+export interface LessonScene { title:string; bullets:string[]; narration:string; seconds:number; visual:'steps'|'particles'|'atom'|'wave'|'comparison'; formula?:string; source?:string; audioSrc?:string }
+export interface VideoLesson { title:string; subject:string; language:'zh-CN'|'en'; scenes:LessonScene[]; sources:string[] }
+export interface TeachingVideo { id:string;sessionId?:string;title:string;subject:string;language:string;status:'queued'|'rendering'|'ready'|'failed'|'cancelled';progress:number;stage:string;createdAt:string;duration?:number;audio?:boolean;error?:string;url?:string;sources:string[] }

@@ -1,0 +1,360 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import { MessageCircleQuestion } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { appStore, pageFromSearch, type AppPage, type WorkspaceMode } from "../stores/app-store.js";
+import { settingsStore } from "../stores/settings-store.js";
+import { themeStore, type ThemeId } from "../stores/theme-store.js";
+import { sessionsStore } from "../stores/sessions-store.js";
+import { btwStore } from "../stores/btw-store.js";
+import { workspacesStore } from "../stores/workspaces-store.js";
+import { chatStore } from "../stores/chat-store.js";
+import { terminalStore } from "../stores/terminal-store.js";
+import { useStoreSnapshot } from "./hooks.js";
+import { InnoDndProvider } from "./ui/dnd-backend.js";
+import { ChatCenter } from "./ChatCenter.js";
+import { FeaturePage } from "./FeaturePage.js";
+import { SessionSidebar } from "./SessionSidebar.js";
+import { WorkspacePanel } from "./WorkspacePanel.js";
+import { DesktopWindowChrome } from "./DesktopWindowChrome.js";
+import { SettingsOverlay } from "./settings/SettingsOverlay.js";
+import {
+	CHAT_ONLY_BP,
+	fitPanelLayout,
+	WORKSPACE_DEFAULT_WIDTH,
+} from "../stores/app-layout.js";
+import { ensureWindowForPanel } from "../stores/window-expansion.js";
+
+let initializationPromise: Promise<void> | null = null;
+
+function initializeApp(): Promise<void> {
+	if (initializationPromise) return initializationPromise;
+	initializationPromise = (async () => {
+		await Promise.all([sessionsStore.load(), workspacesStore.load()]);
+		const requestedSession = new URL(window.location.href).searchParams.get("session");
+		if (requestedSession) await sessionsStore.openSession(requestedSession, { historyMode: "none" });
+	})();
+	return initializationPromise;
+}
+
+export function App() {
+	const { t } = useTranslation();
+	const isDesktopWindow = Boolean(window.innoDesktop);
+	const [workspaceNarrowHint, setWorkspaceNarrowHint] = useState(false);
+	const workspaceHintTimerRef = useRef<number | null>(null);
+	const showWorkspaceNarrowHint = useCallback(() => {
+		setWorkspaceNarrowHint(true);
+		if (workspaceHintTimerRef.current !== null) window.clearTimeout(workspaceHintTimerRef.current);
+		workspaceHintTimerRef.current = window.setTimeout(() => setWorkspaceNarrowHint(false), 2600);
+	}, []);
+	useEffect(() => () => {
+		if (workspaceHintTimerRef.current !== null) window.clearTimeout(workspaceHintTimerRef.current);
+	}, []);
+	const app = useStoreSnapshot(appStore, () => ({
+		page: appStore.page,
+		sidebarCollapsed: appStore.sidebarCollapsed,
+		workspaceMode: appStore.workspaceMode,
+		workspaceWidth: appStore.workspaceWidth,
+	}));
+	const currentSessionId = useStoreSnapshot(sessionsStore, () => sessionsStore.currentSessionId);
+	const btwPanelVisible = useStoreSnapshot(btwStore, () => btwStore.isVisible && btwStore.activeSessionId === sessionsStore.currentSessionId);
+	// The BtwPanel only mounts inside ChatCenter, so the desktop chrome button
+	// must hide on feature pages — clicking it there would open nothing.
+	const desktopBtwControl = isDesktopWindow && app.page === "chat" && app.workspaceMode === "collapsed" && currentSessionId ? (
+		<button
+			type="button"
+			className={`inno-window-chrome-button inno-window-chrome-btw-button ${btwPanelVisible ? "is-active" : ""}`}
+			title="随便问问"
+			aria-label="随便问问"
+			aria-expanded={btwPanelVisible}
+			onClick={() => void btwStore.openOrRestore(currentSessionId)}
+		>
+			<MessageCircleQuestion size={15} />
+		</button>
+	) : undefined;
+	useEffect(() => {
+		void initializeApp();
+		const onPopState = () => {
+			// Restore the main-area page from the URL (back/forward navigation).
+			appStore.setPage(pageFromSearch(window.location.search), "none");
+			const sessionId = new URL(window.location.href).searchParams.get("session");
+			if (!sessionId) sessionsStore.showWelcomeFromHistory();
+			else if (sessionId !== sessionsStore.currentSessionId) void sessionsStore.openSession(sessionId, { historyMode: "none" });
+		};
+		window.addEventListener("popstate", onPopState);
+		return () => window.removeEventListener("popstate", onPopState);
+	}, []);
+
+	// Load settings once at boot so Simple Mode (tab hiding, preset cards) is
+	// available app-wide before the user ever opens the Settings panel.
+	useEffect(() => {
+		void settingsStore.load();
+		// After settings load, sync theme from backend if it differs from local.
+		// localStorage is the instant source (FOWT prevention); backend keeps
+		// theme consistent across devices.
+		const unsubscribe = settingsStore.on("change", () => {
+			const remote = settingsStore.settings?.ui?.theme as ThemeId | undefined;
+			if (remote && remote !== themeStore.current) {
+				themeStore.apply(remote);
+			}
+		});
+		return unsubscribe;
+	}, []);
+
+	// Re-arm live connections when a backgrounded page returns. Mobile browsers
+	// suspend timers and kill in-flight streams/sockets while hidden, so both
+	// the chat SSE stream and the terminal WebSocket get a resume hook.
+	useEffect(() => {
+		const onResume = () => {
+			if (document.visibilityState !== "visible") return;
+			void chatStore.handleAppResume();
+			terminalStore.handleAppResume();
+		};
+		document.addEventListener("visibilitychange", onResume);
+		window.addEventListener("pageshow", onResume);
+		window.addEventListener("online", onResume);
+		return () => {
+			document.removeEventListener("visibilitychange", onResume);
+			window.removeEventListener("pageshow", onResume);
+			window.removeEventListener("online", onResume);
+		};
+	}, []);
+
+	// At narrow widths the chat is the primary surface: remove both optional
+	// columns together so they cannot squeeze the conversation into a sliver.
+	// We intentionally do not restore either column when the window widens again;
+	// reopening a panel is an explicit user action. Runs only on mount and on
+	// breakpoint transitions — NOT on panel state changes, so panels reopened at
+	// narrow widths (drawer sidebar / full-overlay workspace) stay open.
+	useEffect(() => {
+		const mql = window.matchMedia(`(max-width: ${CHAT_ONLY_BP}px)`);
+		const enforceChatOnly = (e: MediaQueryListEvent | MediaQueryList) => {
+			if (!e.matches) return;
+			if (!appStore.sidebarCollapsed) appStore.setSidebarCollapsed(true);
+			if (appStore.workspaceMode !== "collapsed") appStore.setWorkspaceMode("collapsed");
+		};
+		enforceChatOnly(mql);
+		mql.addEventListener("change", enforceChatOnly);
+		return () => mql.removeEventListener("change", enforceChatOnly);
+	}, []);
+
+	// Track the narrow breakpoint so the drawer scrim only renders on small
+	// viewports; desktop uses the side-by-side column layout instead.
+	const [isNarrow, setIsNarrow] = useState(() =>
+		typeof window !== "undefined" && window.matchMedia(`(max-width: ${CHAT_ONLY_BP}px)`).matches,
+	);
+	useEffect(() => {
+		const mql = window.matchMedia(`(max-width: ${CHAT_ONLY_BP}px)`);
+		const onChange = (e: MediaQueryListEvent) => setIsNarrow(e.matches);
+		mql.addEventListener("change", onChange);
+		return () => mql.removeEventListener("change", onChange);
+	}, []);
+
+	// Keep the app shell matched to the *visual* viewport. On iOS the virtual
+	// keyboard shrinks the visual viewport without touching the layout viewport,
+	// which would otherwise leave the bottom-docked composer hidden behind the
+	// keyboard. Chrome/Android handles this via `interactive-widget=resizes-content`
+	// in the viewport meta; this hook is the cross-browser fallback. Ignored
+	// while pinch-zoomed (scale !== 1), where tracking would fight the zoom.
+	useEffect(() => {
+		const vv = window.visualViewport;
+		if (!vv) return;
+		const apply = () => {
+			if (vv.scale !== 1) return;
+			document.documentElement.style.setProperty("--inno-viewport-height", `${Math.round(vv.height)}px`);
+		};
+		apply();
+		vv.addEventListener("resize", apply);
+		vv.addEventListener("scroll", apply);
+		return () => {
+			vv.removeEventListener("resize", apply);
+			vv.removeEventListener("scroll", apply);
+			document.documentElement.style.removeProperty("--inno-viewport-height");
+		};
+	}, []);
+
+	// A window can be resized after a panel was opened. Keep that action from
+	// leaving the chat squeezed beside a stale, oversized workspace preview.
+	// Feature pages don't render the right panel — leave its layout state alone.
+	useEffect(() => {
+		if (app.page !== "chat") return;
+		const fitCurrentLayout = () => {
+			const currentMode = appStore.workspaceMode;
+			if (currentMode === "collapsed" || currentMode === "full") return;
+			const fitted = fitPanelLayout(
+				window.innerWidth,
+				appStore.sidebarCollapsed,
+				currentMode,
+				appStore.workspaceWidth,
+			);
+			if (!fitted) {
+				appStore.setWorkspaceMode("collapsed");
+				return;
+			}
+			if (fitted.sidebarCollapsed !== appStore.sidebarCollapsed) {
+				appStore.setSidebarCollapsed(fitted.sidebarCollapsed);
+			}
+			if (fitted.workspaceMode !== appStore.workspaceMode) {
+				appStore.setWorkspaceMode(fitted.workspaceMode);
+			}
+			if (fitted.workspaceWidth !== appStore.workspaceWidth) {
+				appStore.setWorkspaceWidth(fitted.workspaceWidth);
+			}
+		};
+
+		fitCurrentLayout();
+		window.addEventListener("resize", fitCurrentLayout);
+		return () => window.removeEventListener("resize", fitCurrentLayout);
+	}, [app.page]);
+
+	const openPresetPanels = useCallback(async () => {
+		if (isNarrow) {
+			// No room for a split layout: open the preview as a full-screen overlay.
+			appStore.setRightPanelTab("preview");
+			appStore.setWorkspaceMode("full");
+			return;
+		}
+		const previewWidth = WORKSPACE_DEFAULT_WIDTH;
+		if (appStore.workspaceMode === "full") {
+			// Full mode overlays the chat; start from the normal split state before
+			// making room for both optional columns.
+			appStore.setWorkspaceMode("collapsed");
+		}
+
+		if (appStore.sidebarCollapsed) {
+			const leftResult = await ensureWindowForPanel("left");
+			if (leftResult === "busy") return;
+			appStore.setSidebarCollapsed(false);
+		}
+
+		const rightResult = await ensureWindowForPanel("right", previewWidth, "half");
+		if (rightResult === "busy") return;
+		// Do not force the sidebar closed here: setWorkspaceMode below already
+		// collapses it if (and only if) that is what makes the panel fit.
+		appStore.setRightPanelTab("preview");
+		appStore.setWorkspaceWidth(previewWidth);
+		appStore.setWorkspaceMode("half");
+	}, [isNarrow, ensureWindowForPanel]);
+
+	const openFilePreview = useCallback(async (minimumWidth: number) => {
+		// Full mode is already the reading surface; selecting another file should
+		// not unexpectedly return the user to a split layout.
+		if (appStore.workspaceMode === "full") return;
+		if (isNarrow) {
+			appStore.setWorkspaceMode("full");
+			return;
+		}
+		const previewWidth = appStore.workspaceMode === "collapsed"
+			? minimumWidth
+			: Math.max(minimumWidth, appStore.workspaceWidth);
+		const result = await ensureWindowForPanel("right", previewWidth, "half");
+		if (result === "busy") return;
+		// Do not force the sidebar closed here: setWorkspaceWidth/setWorkspaceMode
+		// below already collapse it if (and only if) that is what makes the panel fit.
+		appStore.setWorkspaceWidth(previewWidth);
+		appStore.setWorkspaceMode("half");
+	}, [isNarrow, ensureWindowForPanel]);
+
+	const openSidebar = useCallback(() => {
+		void (async () => {
+			const result = await ensureWindowForPanel("left");
+			if (result === "busy") return;
+			// If the display cannot fit both optional columns, the store fits the
+			// workspace or closes it so the clicked panel still responds.
+			appStore.setSidebarCollapsed(false);
+		})();
+	}, [ensureWindowForPanel]);
+	const toggleSidebar = useCallback(() => {
+		if (appStore.sidebarCollapsed) {
+			void openSidebar();
+			return;
+		}
+		appStore.setSidebarCollapsed(true);
+	}, [openSidebar]);
+
+	const setWorkspaceMode = useCallback((mode: WorkspaceMode) => {
+		if (mode === "collapsed" || app.workspaceMode !== "collapsed") {
+			appStore.setWorkspaceMode(mode);
+			return;
+		}
+		void (async () => {
+			// Opening the file area is a deliberate transition into the split
+			// workspace view. Restore the reference width when an older saved
+			// value is only wide enough for the narrow single-pane fallback.
+			const requestedWidth = Math.max(app.workspaceWidth, WORKSPACE_DEFAULT_WIDTH);
+			const result = await ensureWindowForPanel("right", requestedWidth, "half");
+			if (result === "busy") return;
+			// Do not force the sidebar closed here: setWorkspaceMode below already
+			// collapses it if (and only if) that is what makes the panel fit, and
+			// otherwise leaves the layout untouched instead of collapsing for nothing.
+			if (appStore.workspaceWidth < requestedWidth) appStore.setWorkspaceWidth(requestedWidth);
+			appStore.setWorkspaceMode(mode);
+			// The layout fitter can refuse the split when the viewport is too
+			// narrow; a clickable button that silently does nothing is worse than
+			// an explicit hint.
+			if (appStore.workspaceMode === "collapsed") showWorkspaceNarrowHint();
+		})();
+	}, [app.workspaceMode, ensureWindowForPanel, showWorkspaceNarrowHint]);
+	const toggleWorkspace = useCallback(() => {
+		setWorkspaceMode(app.workspaceMode === "collapsed" ? "half" : "collapsed");
+	}, [app.workspaceMode, setWorkspaceMode]);
+	const setWorkspaceWidth = useCallback((width: number) => appStore.setWorkspaceWidth(width), []);
+
+	// Feature pages occupy the whole center column; the right workspace panel is
+	// a chat-only surface. Its mode/width state is preserved (not mutated) so
+	// returning to chat restores the exact previous layout.
+	const chatVisible = app.page === "chat";
+	const layoutWorkspaceMode = chatVisible ? app.workspaceMode : "collapsed";
+
+	return (
+		<>
+			<InnoDndProvider>
+				<div
+					className={`app-layout app-layout--${isDesktopWindow ? "desktop" : "browser"} app-layout--sidebar-${app.sidebarCollapsed ? "collapsed" : "expanded"} app-layout--workspace-${layoutWorkspaceMode}`}
+					style={{ "--inno-workspace-width": `${app.workspaceWidth}px` } as React.CSSProperties}
+				>
+					<SessionSidebar collapsed={app.sidebarCollapsed} />
+					{chatVisible ? (
+						<ChatCenter onOpenPresetPanels={openPresetPanels} onPreviewFile={openFilePreview} />
+					) : (
+						<FeaturePage page={app.page as Exclude<AppPage, "chat">} />
+					)}
+					{chatVisible ? (
+						<WorkspacePanel
+							mode={app.workspaceMode}
+							width={app.workspaceWidth}
+							onModeChange={setWorkspaceMode}
+							onWidthChange={setWorkspaceWidth}
+							onPreviewFile={openFilePreview}
+						/>
+					) : null}
+					<DesktopWindowChrome
+						showWorkspaceControl={chatVisible}
+						sidebarCollapsed={app.sidebarCollapsed}
+						workspaceCollapsed={app.workspaceMode === "collapsed"}
+						btwControl={desktopBtwControl}
+						onToggleSidebar={toggleSidebar}
+						onToggleWorkspace={toggleWorkspace}
+					/>
+					{/* Narrow viewports present the sidebar as an overlay drawer; the
+						scrim behind it dismisses the drawer on tap. */}
+					{isNarrow && !app.sidebarCollapsed ? (
+						<div
+							className="app-layout-scrim"
+							aria-hidden="true"
+							onClick={() => appStore.setSidebarCollapsed(true)}
+						/>
+					) : null}
+				</div>
+			</InnoDndProvider>
+			{workspaceNarrowHint ? (
+				<div
+					role="status"
+					className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full border border-[var(--inno-border)] bg-[var(--inno-surface)] px-4 py-2 text-xs text-[var(--inno-text-muted)] shadow-[var(--inno-shadow-soft)]"
+				>
+					{t("workspace.windowTooNarrow")}
+				</div>
+			) : null}
+			<SettingsOverlay />
+		</>
+	);
+}

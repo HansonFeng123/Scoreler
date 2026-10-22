@@ -1,0 +1,2 @@
+/** Streamdown understands dollar math; preserve literal code while adapting model LaTeX delimiters. */
+export function mathMarkdown(text:string){return text.split(/(```[\s\S]*?(?:```|$)|~~~[\s\S]*?(?:~~~|$)|`[^`\n]*`)/g).map((part,i)=>i%2?part:part.replace(/\\\[([\s\S]*?)\\\]/g,(_all,math:string)=>`\n\n$$\n${math.trim()}\n$$\n\n`).replace(/\\\(([\s\S]*?)\\\)/g,(_all,math:string)=>`$${math.trim()}$`)).join('');}

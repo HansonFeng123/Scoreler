@@ -1,0 +1,778 @@
+import { protectConfig, unprotectConfig } from './scoreler/credentials.js';
+import { chmodSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import type { RuntimePaths } from "./runtime.js";
+import { DEFAULT_SCHEDULER_TIMEZONE } from "./scheduler/cron-utils.js";
+import { writeJson } from "./storage/file-store.js";
+
+export type InnoProviderApi = "openai-completions" | "openai-responses" | "anthropic-messages" | string;
+export type InnoModelInput = "text" | "image";
+
+export interface InnoModelConfig {
+	supportsTools?: boolean;
+	id: string;
+	name: string;
+	reasoning: boolean;
+	input: InnoModelInput[];
+	contextWindow: number;
+	maxTokens: number;
+}
+
+export interface InnoProviderConfig {
+	baseUrl: string;
+	apiKey: string;
+	api?: InnoProviderApi;
+	headers?: Record<string, string>;
+	authHeader?: boolean;
+	bypassProxy?: boolean;
+	models: InnoModelConfig[];
+}
+
+export interface InnoSubagentsConfig {
+	enabled: boolean;
+}
+
+export interface InnoMemoryConfig {
+	/**
+	 * When true (default), the L1 learner profile is active: the per-turn
+	 * context pack (profile + recent events) is injected into the system prompt
+	 * and the learner tools record/update the profile. When false, the profile
+	 * is neither read into the prompt nor written by tools.
+	 */
+	l1Enabled: boolean;
+	/**
+	 * When true (default), L2 Wiki memory is active: the `l2_archive` /
+	 * `l2_query` tools can write and read the knowledge base. When false, those
+	 * tools become no-ops that report L2 is disabled.
+	 */
+	l2Enabled: boolean;
+	/**
+	 * When true (default), L3 cross-conversation recall is active: past sessions
+	 * are searched via sqlite and relevant snippets are auto-injected / the
+	 * `l3_recall` tool is exposed. When false, replies use only the current
+	 * workspace contents and the current session context.
+	 */
+	l3Enabled: boolean;
+}
+
+/**
+ * Smart Input (便捷输入). Global, enabled by default. When enabled, the web
+ * composer recognizes literal keywords (e.g. "pdf", "word") in the typed text
+ * and converts them into file-binding bubbles; files bound to a bubble are
+ * sent to the agent as structured attachments instead of relying on the model
+ * to guess which file a demonstrative ("这份") refers to.
+ *
+ * A rule matches by literal keyword only (no regex/segments). Each rule can
+ * either map one keyword to a set of allowed file extensions, or accept all
+ * file formats with an optional exclusion list. Users manage rules in
+ * Settings → General (add / rename / edit extensions / toggle / delete); built-in
+ * rules are always retained and can only be toggled off.
+ */
+export interface InnoSmartInputRule {
+	id: string;
+	/** Built-in rule ids are recognized during config migration. */
+	isPreset: boolean;
+	keyword: string;
+	/** Allowed extensions when `allExtensions` is false. */
+	extensions: string[];
+	/** Accept every file format before applying `excludeExtensions`. */
+	allExtensions: boolean;
+	/** Extensions rejected after the allow-list/all-formats check. */
+	excludeExtensions: string[];
+	enabled: boolean;
+}
+
+export interface InnoSmartInputConfig {
+	enabled: boolean;
+	allowDrag: boolean;
+	allowRightClick: boolean;
+	/** Convert Agent slash commands and skill keywords into inline bubbles. */
+	allowAgentCommands: boolean;
+	rules: InnoSmartInputRule[];
+}
+
+/** Default keyword rules — common document nouns mapped to real extensions. */
+export const DEFAULT_SMART_INPUT_RULES: InnoSmartInputRule[] = [
+	{ id: "smart-rule-pdf", isPreset: true, keyword: "pdf", extensions: [".pdf"], allExtensions: false, excludeExtensions: [], enabled: true },
+	{ id: "smart-rule-word", isPreset: true, keyword: "word", extensions: [".doc", ".docx"], allExtensions: false, excludeExtensions: [], enabled: true },
+	{ id: "smart-rule-excel", isPreset: true, keyword: "excel", extensions: [".xls", ".xlsx"], allExtensions: false, excludeExtensions: [], enabled: true },
+	{ id: "smart-rule-ppt", isPreset: true, keyword: "ppt", extensions: [".ppt", ".pptx"], allExtensions: false, excludeExtensions: [], enabled: true },
+	{
+		id: "smart-rule-image",
+		isPreset: true,
+		keyword: "图片",
+		extensions: [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tiff"],
+		allExtensions: false,
+		excludeExtensions: [],
+		enabled: true,
+	},
+	{
+		// Generic "文件" rule: accepts every format by default but ships
+		// disabled — users opt in from the settings panel.
+		id: "smart-rule-file",
+		isPreset: true,
+		keyword: "文件",
+		extensions: [],
+		allExtensions: true,
+		excludeExtensions: [],
+		enabled: false,
+	},
+];
+
+const DEFAULT_SMART_INPUT_RULE_IDS = new Set(DEFAULT_SMART_INPUT_RULES.map((rule) => rule.id));
+
+/**
+ * MCP (Model Context Protocol) support via the pi-mcp-adapter extension.
+ * Master switch (default OFF, opt-in). Server definitions live in the standard
+ * MCP config file `<configDir>/mcp-adapter.json` (managed through the web UI or
+ * edited by hand); the adapter also merges the usual shared locations (`.mcp.json` in
+ * the workspace, `~/.config/mcp/mcp.json`, …). Changing `enabled` takes effect
+ * on the next process start because the extension set is fixed at boot.
+ */
+export interface InnoMcpConfig {
+	enabled: boolean;
+}
+
+/**
+ * Scheduler defaults. `timezone` is the fallback IANA timezone for scheduled
+ * jobs that don't pin their own — previously hardcoded to Asia/Shanghai in
+ * several spots; now configurable for users in other regions.
+ */
+export interface InnoSchedulerConfig {
+	timezone: string;
+}
+
+/** What should happen when the desktop window's close button is clicked. */
+export type InnoCloseBehavior = "ask" | "hide" | "quit";
+
+/**
+ * Permission policy template selected via the settings UI. "default" asks on
+ * bash commands outside the read-only allowlist; "auto" auto-approves all
+ * bash; "yolo" auto-approves every surface (the plugin's yoloMode rewrites
+ * ask → allow). All three keep the hard-deny floor (destructive commands,
+ * credential paths) — yoloMode cannot rewrite a deny.
+ */
+export type PermissionPolicyMode = "default" | "auto" | "yolo";
+
+export interface InnoUiConfig {
+	theme: string;
+	closeBehavior: InnoCloseBehavior;
+	/** Allow $...$ inline math. Disabled by default so currency stays plain text. */
+	mathSingleDollar: boolean;
+}
+
+/**
+ * Content Hub. The single source for remotely-fetched, ready-to-use content:
+ * the global skill library and the Simple Mode preset workspaces. Both used to
+ * be either hardcoded (skill library → a fixed GitHub repo) or bundled with the
+ * app (presets → `<codeDir>/presets/`). Centralizing them here lets a single
+ * config block point the whole hub at a different source — including a private
+ * self-hosted bundle service — without touching code.
+ *
+ * Two transport types:
+ *   - "github": a public/private GitHub repo. `owner`/`repo`/`ref` locate it;
+ *     `skillsPath`/`presetsPath` are the top-level directories within it.
+ *     `token` raises the API rate limit / unlocks private repos.
+ *   - "bundle": a self-hosted service exposing `GET {baseUrl}/index.json` and
+ *     `GET {baseUrl}/{presets|skills}/{id}.tar.gz`. `token` (if set) is sent as
+ *     a Bearer credential. Avoids GitHub rate limits for private deployments.
+ */
+export interface InnoContentHubConfig {
+	type: "github" | "bundle";
+	/** GitHub repo owner (type: "github"). */
+	owner: string;
+	/** GitHub repo name (type: "github"). */
+	repo: string;
+	/** GitHub branch / tag / sha (type: "github"). */
+	ref: string;
+	/** Top-level directory holding the skill library. */
+	skillsPath: string;
+	/** Top-level directory holding the preset workspaces. */
+	presetsPath: string;
+	/** Base URL of the self-hosted bundle service (type: "bundle"). */
+	baseUrl: string;
+	/** Auth token: GitHub PAT (type "github") or Bearer credential (type "bundle"). */
+	token: string;
+}
+
+/** Built-in defaults — the public hub the app shipped with. */
+export const DEFAULT_CONTENT_HUB: InnoContentHubConfig = {
+	type: "github",
+	owner: "Chloris-Blaxk",
+	repo: "inno-agent-hub",
+	ref: "main",
+	skillsPath: "skill-library",
+	presetsPath: "workspace-templates",
+	baseUrl: "",
+	token: "",
+};
+
+export interface PersonalChannelConfig {
+	enabled: boolean;
+	personalOnly?: boolean;
+	allowedUserIds?: string[];
+}
+
+export interface PersonalBridgeChannelConfig extends PersonalChannelConfig {
+	mode: "bridge";
+	sidecarBaseUrl: string;
+}
+
+export interface PersonalILinkChannelConfig extends PersonalChannelConfig {
+	mode?: "ilink";
+}
+
+export interface InnoConfig {
+	defaultProvider: string;
+	defaultModel: string;
+	providers: Record<string, InnoProviderConfig>;
+	server?: {
+		port: number;
+	};
+	feishu?: {
+		appId: string;
+		appSecret: string;
+	};
+	channels?: {
+		feishu?: PersonalChannelConfig;
+		qq?: PersonalBridgeChannelConfig;
+		wechat?: PersonalBridgeChannelConfig | PersonalILinkChannelConfig;
+		wecom?: { enabled: boolean };
+	};
+	bridge?: {
+		token: string;
+	};
+	github?: {
+		/** Personal access token to raise GitHub API rate limits for the skill library. */
+		token: string;
+	};
+	/** Remote source for the skill library + preset workspaces. */
+	contentHub?: InnoContentHubConfig;
+	subagents?: InnoSubagentsConfig;
+	memory?: InnoMemoryConfig;
+	smartInput?: InnoSmartInputConfig;
+	mcp?: InnoMcpConfig;
+	ui?: InnoUiConfig;
+	scheduler?: InnoSchedulerConfig;
+	/**
+	 * Optional OCR API config (Baidu PaddleOCR-VL). When the configured model
+	 * cannot recognize images, the agent calls the `ocr_image` tool which uses
+	 * these credentials to submit an async OCR job and poll for the markdown
+	 * result. Unconfigured → the tool returns a "not configured" hint.
+	 */
+	ocrApi?: {
+		token: string;
+		model?: string;
+		baseUrl?: string;
+	};
+	/**
+	 * Optional Tavily config. The `web_search` tool uses this API key for
+	 * internet search. Unconfigured → the tool returns a "not configured" hint.
+	 */
+	tavily?: {
+		apiKey: string;
+	};
+	/**
+	 * Third-party PI extensions bundled with inno-agent. All default to
+	 * enabled; set `enabled: false` to opt out without uninstalling.
+	 *
+	 * - `todo` (@juicesharp/rpiv-todo): registers the `todo` task-list tool.
+	 *   TUI overlay/shortcuts activate only in CLI mode (ctx.hasUI).
+	 * - `webAccess` (pi-web-access): registers `fetch_content` +
+	 *   `get_search_content` (URL/GitHub/PDF/YouTube extraction). Its own
+	 *   `web_search`/`source_check` tools stay disabled via the managed
+	 *   `<configDir>/web-search.json` default so the built-in Tavily
+	 *   `web_search` remains the single search tool.
+	 * - `permissionSystem` (@gotgenes/pi-permission-system): allow/ask/deny
+	 *   policy gate for tool calls, bash commands, MCP, skills and file paths.
+	 *   Policy lives in `<configDir>/extensions/pi-permission-system/config.json`
+	 *   (managed default on first run). In server mode `ask` verdicts are
+	 *   answered by the web approval card via the `inno-web` authorizer link
+	 *   (permission-bridge.ts); no answer → deny (fail-closed). `mode` selects
+	 *   the managed policy template ("default" asks on non-allowlisted bash,
+	 *   "auto" auto-approves bash, "yolo" auto-approves every surface); the
+	 *   hard-deny floor (destructive commands, credential paths) applies in all
+	 *   three. Switching modes rewrites the plugin config file from the
+	 *   template — hand edits to that file are lost on a mode switch.
+	 * - `computerUse` (@injaneity/pi-computer-use): desktop GUI control
+	 *   tools (find_roots / observe_ui / search_ui / act_ui / browser tools).
+	 *   Drives the local screen, so unlike the other plugins it is NOT on by
+	 *   default everywhere: unset `enabled` means on only when INNO_DESKTOP=1
+	 *   (set by electron/main.js for the desktop app); `enabled: true` opts
+	 *   in anywhere (e.g. a local CLI run); `enabled: false` always wins.
+	 *   Online deployments (no INNO_DESKTOP) stay off unless explicitly
+	 *   enabled. On macOS the helper app (~/Applications/pi-computer-use.app)
+	 *   needs Accessibility + Screen Recording grants; headless sessions
+	 *   cannot prompt, so a missing grant surfaces as a tool error with
+	 *   grant instructions.
+	 * - `codemode` (PI built-in `codemode` tool): lets the model write JS
+	 *   scripts (QuickJS sandbox) that call the session's other tools, so
+	 *   batch work happens in one call and only the script's output reaches
+	 *   the model. Nested calls run through the normal tool pipeline, so
+	 *   permission checks and observability events still apply. Default OFF:
+	 *   the web trace timeline shows a codemode call as a single step (its
+	 *   nested calls are only visible in logs), which trades away some of the
+	 *   per-tool transparency inno's teaching loop relies on. Activation is
+	 *   managed via the `defaultTools` entry in PI's settings.json
+	 *   (`syncCodemodeDefaultTools` in pi-runner.ts) and takes effect on
+	 *   restart, like computer use.
+	 */
+	plugins?: {
+		todo?: { enabled?: boolean };
+		webAccess?: { enabled?: boolean };
+		permissionSystem?: { enabled?: boolean; mode?: PermissionPolicyMode };
+		computerUse?: { enabled?: boolean };
+		codemode?: { enabled?: boolean };
+	};
+}
+
+interface LegacyInnoConfig extends Partial<InnoConfig> {
+	openai?: InnoProviderConfig;
+}
+
+const LEGACY_OPENAI_PROVIDER_ID = "openai-custom";
+
+function firstConfiguredModel(providers: Record<string, InnoProviderConfig>): { provider: string; model: string } | undefined {
+	for (const [provider, providerConfig] of Object.entries(providers)) {
+		const model = providerConfig.models[0];
+		if (model) return { provider, model: model.id };
+	}
+	return undefined;
+}
+
+export function normalizeModelConfig(model: Partial<InnoModelConfig> & { id: string }): InnoModelConfig {
+	const id = model.id.trim();
+	if (!id) throw new Error("Model id is required");
+	const contextWindow = model.contextWindow;
+	const maxTokens = model.maxTokens;
+	// Vision support is controlled by the optional `input` array. For legacy
+	// configs that predate this field, preserve the historical behavior
+	// (text+image) instead of silently downgrading vision-capable models
+	// (Claude/GPT-4o) to text-only. Only configs that explicitly set `input`
+	// without "image" are treated as text-only.
+	const hasInputField = "input" in model;
+	const supportsImages = hasInputField
+		? Array.isArray(model.input) && model.input.includes("image")
+		: true;
+	return {
+		id,
+		name: (model.name?.trim() || id),
+        ...(model.supportsTools === false ? { supportsTools: false } : {}),
+		reasoning: Boolean(model.reasoning),
+		input: supportsImages ? ["text", "image"] : ["text"],
+		contextWindow: contextWindow !== undefined && Number.isFinite(contextWindow) && contextWindow > 0 ? Math.trunc(contextWindow) : 128000,
+		maxTokens: maxTokens !== undefined && Number.isFinite(maxTokens) && maxTokens > 0 ? Math.trunc(maxTokens) : 8192,
+	};
+}
+
+function normalizeProviderHeaders(headers: InnoProviderConfig["headers"] | undefined): Record<string, string> | undefined {
+	if (!headers || typeof headers !== "object" || Array.isArray(headers)) return undefined;
+	const normalized = Object.fromEntries(
+		Object.entries(headers)
+			.map(([key, value]) => [key.trim(), value] as const)
+			.filter(([key, value]) => key.length > 0 && typeof value === "string"),
+	);
+	return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
+export function normalizeProviderConfig(provider: Partial<InnoProviderConfig>): InnoProviderConfig {
+	const baseUrl = provider.baseUrl?.trim() ?? "";
+	if (!baseUrl) throw new Error("Provider baseUrl is required");
+	const models = (provider.models ?? []).map((model) => normalizeModelConfig(model));
+	if (models.length === 0) throw new Error("Provider must include at least one model");
+	const headers = normalizeProviderHeaders(provider.headers);
+	return {
+		baseUrl,
+		apiKey: provider.apiKey ?? "",
+		api: provider.api?.trim() || "openai-completions",
+		...(headers ? { headers } : {}),
+		...(typeof provider.authHeader === 'boolean' ? { authHeader: provider.authHeader } : {}),
+		...(provider.bypassProxy === true ? { bypassProxy: true } : {}),
+		models,
+	};
+}
+
+export function normalizeMemoryConfig(memory: Partial<InnoMemoryConfig> | undefined): InnoMemoryConfig {
+	// All three memory layers default to ON; only an explicit `false` disables one.
+	return {
+		l1Enabled: memory?.l1Enabled !== false,
+		l2Enabled: memory?.l2Enabled !== false,
+		l3Enabled: memory?.l3Enabled !== false,
+	};
+}
+
+/** Normalize one extension: lowercase, strip whitespace, ensure a leading dot. */
+export function normalizeSmartInputExtension(raw: string): string | null {
+	const trimmed = raw.trim().toLowerCase();
+	if (!trimmed) return null;
+	const withDot = trimmed.startsWith(".") ? trimmed : `.${trimmed}`;
+	// Must contain at least one letter beyond the dot to be a real extension.
+	if (!/^\.[a-z0-9][a-z0-9]*$/.test(withDot)) return null;
+	return withDot;
+}
+
+/**
+ * Normalize smart-input rules: trim keywords, drop empty/duplicate keywords
+ * (system presets win duplicate keywords), normalize/dedupe allowed and
+ * excluded extensions, backfill stable ids for rules saved without one, and
+ * restore any missing built-in rules. A rule with no allowed extensions is
+ * valid but matches nothing until the user either adds one or enables
+ * all-formats mode.
+ */
+export function normalizeSmartInputConfig(
+	smartInput: Partial<InnoSmartInputConfig> | undefined,
+): InnoSmartInputConfig {
+	const seenKeywords = new Set<string>();
+	const seenIds = new Set<string>();
+	const normalizeExtensions = (values: unknown): string[] => Array.from(new Set(
+		(Array.isArray(values) ? values : [])
+			.map((ext) => normalizeSmartInputExtension(String(ext)))
+			.filter((ext): ext is string => ext !== null),
+	));
+	const configuredRules = Array.isArray(smartInput?.rules);
+	const isPresetCandidate = (rule: InnoSmartInputRule): boolean =>
+		rule.isPreset === true || (typeof rule.id === "string" && DEFAULT_SMART_INPUT_RULE_IDS.has(rule.id));
+	// A user-created rule may have the same keyword as a built-in rule in an
+	// older or hand-edited config. Process presets first so the built-in rule
+	// survives normalization and remains the preferred bubble keyword.
+	const rawRules = configuredRules
+		? [...(smartInput?.rules ?? [])].sort((a, b) => Number(isPresetCandidate(b)) - Number(isPresetCandidate(a)))
+		: [];
+	const rules: InnoSmartInputRule[] = [];
+	for (const rule of rawRules) {
+		const keyword = (rule.keyword ?? "").trim();
+		if (!keyword || seenKeywords.has(keyword)) continue;
+		const extensions = normalizeExtensions(rule.extensions);
+		const excludeExtensions = normalizeExtensions(rule.excludeExtensions);
+		let id = typeof rule.id === "string" && rule.id.trim() ? rule.id.trim() : "";
+		if (!id || seenIds.has(id)) id = `smart-rule-${keyword}`;
+		if (seenIds.has(id)) id = `smart-rule-${keyword}-${rules.length}`;
+		// Older configs do not carry isPreset. Recognize the stable built-in
+		// ids during migration, while treating other rules as user-created.
+		const isPreset = rule.isPreset === true || DEFAULT_SMART_INPUT_RULE_IDS.has(id);
+		seenKeywords.add(keyword);
+		seenIds.add(id);
+		rules.push({
+			id,
+			isPreset,
+			keyword,
+			extensions,
+			allExtensions: rule.allExtensions === true,
+			excludeExtensions,
+			enabled: rule.enabled !== false,
+		});
+	}
+	const configuredPresets = new Map(
+		rules
+			.filter((rule) => DEFAULT_SMART_INPUT_RULE_IDS.has(rule.id))
+			.map((rule) => [rule.id, rule] as const),
+	);
+	const presetRules = DEFAULT_SMART_INPUT_RULES.map((preset) => {
+		const configured = configuredPresets.get(preset.id);
+		return configured ?? {
+			...preset,
+			extensions: [...preset.extensions],
+			excludeExtensions: [...preset.excludeExtensions],
+		};
+	});
+	const presetIds = new Set(presetRules.map((rule) => rule.id));
+	const presetKeywords = new Set(presetRules.map((rule) => rule.keyword));
+	const customRules = rules.filter((rule) =>
+		!presetIds.has(rule.id) && !presetKeywords.has(rule.keyword));
+
+	return {
+		// Default ON; only an explicit false opts out.
+		enabled: smartInput?.enabled !== false,
+		allowDrag: smartInput?.allowDrag !== false,
+		allowRightClick: smartInput?.allowRightClick !== false,
+		// Default ON; only an explicit false opts out.
+		allowAgentCommands: smartInput?.allowAgentCommands !== false,
+		rules: [...presetRules, ...customRules],
+	};
+}
+
+export function normalizeMcpConfig(mcp: Partial<InnoMcpConfig> | undefined): InnoMcpConfig {
+	// MCP defaults OFF; only an explicit `true` enables it.
+	return {
+		enabled: mcp?.enabled === true,
+	};
+}
+
+export function normalizeSchedulerConfig(scheduler: Partial<InnoSchedulerConfig> | undefined): InnoSchedulerConfig {
+	const timezone = typeof scheduler?.timezone === "string" && scheduler.timezone.trim()
+		? scheduler.timezone.trim()
+		: DEFAULT_SCHEDULER_TIMEZONE;
+	return { timezone };
+}
+
+export function normalizeUiConfig(ui: Partial<InnoUiConfig> | undefined): InnoUiConfig {
+	const theme = typeof ui?.theme === "string" && ui.theme.trim() ? ui.theme.trim() : "light";
+	const closeBehavior: InnoCloseBehavior = ui?.closeBehavior === "hide" || ui?.closeBehavior === "quit"
+		? ui.closeBehavior
+		: "ask";
+	return { theme, closeBehavior, mathSingleDollar: ui?.mathSingleDollar === true };
+}
+
+/**
+ * Normalize the Content Hub config, filling missing fields from the built-in
+ * public-hub defaults. `legacyGithubToken` lets us migrate the older
+ * `config.github.token` (which only fed the skill library) into the hub token
+ * so existing users keep their rate-limit credential with zero changes.
+ */
+export function normalizeContentHubConfig(
+	hub: Partial<InnoContentHubConfig> | undefined,
+	legacyGithubToken?: string,
+): InnoContentHubConfig {
+	const type = hub?.type === "bundle" ? "bundle" : "github";
+	const trimmed = (v: string | undefined, fallback: string) => (v?.trim() ? v.trim() : fallback);
+	return {
+		type,
+		owner: trimmed(hub?.owner, DEFAULT_CONTENT_HUB.owner),
+		repo: trimmed(hub?.repo, DEFAULT_CONTENT_HUB.repo),
+		ref: trimmed(hub?.ref, DEFAULT_CONTENT_HUB.ref),
+		skillsPath: trimmed(hub?.skillsPath, DEFAULT_CONTENT_HUB.skillsPath),
+		presetsPath: trimmed(hub?.presetsPath, DEFAULT_CONTENT_HUB.presetsPath),
+		baseUrl: hub?.baseUrl?.trim() ?? "",
+		// Prefer an explicit hub token; otherwise inherit the legacy github token.
+		token: (hub?.token?.trim() || legacyGithubToken?.trim()) ?? "",
+	};
+}
+
+export function normalizeConfig(config: LegacyInnoConfig): InnoConfig {
+	const providers: Record<string, InnoProviderConfig> = {};
+	for (const [providerId, providerConfig] of Object.entries(config.providers ?? {})) {
+		const id = providerId.trim();
+		if (!id) continue;
+		providers[id] = normalizeProviderConfig(providerConfig);
+	}
+
+	if (Object.keys(providers).length === 0 && config.openai) {
+		providers[LEGACY_OPENAI_PROVIDER_ID] = normalizeProviderConfig(config.openai);
+	}
+
+	if (Object.keys(providers).length === 0) {
+		throw new Error("Config must define at least one provider in providers");
+	}
+
+	const fallback = firstConfiguredModel(providers);
+	if (!fallback) throw new Error("Config must define at least one model");
+
+	const defaultProvider = config.defaultProvider?.trim() || fallback.provider;
+	const defaultModel = config.defaultModel?.trim() || fallback.model;
+	const defaultProviderConfig = providers[defaultProvider];
+	const hasDefaultModel = defaultProviderConfig?.models.some((model) => model.id === defaultModel);
+
+	return {
+		defaultProvider: hasDefaultModel ? defaultProvider : fallback.provider,
+		defaultModel: hasDefaultModel ? defaultModel : fallback.model,
+		providers,
+		server: config.server,
+		feishu: config.feishu,
+		channels: config.channels,
+		bridge: config.bridge,
+		github: config.github,
+		contentHub: normalizeContentHubConfig(config.contentHub, config.github?.token),
+		subagents: config.subagents,
+		memory: normalizeMemoryConfig(config.memory),
+		smartInput: normalizeSmartInputConfig(config.smartInput),
+		mcp: normalizeMcpConfig(config.mcp),
+		ui: normalizeUiConfig(config.ui),
+		scheduler: normalizeSchedulerConfig(config.scheduler),
+		ocrApi: config.ocrApi,
+		tavily: config.tavily,
+		plugins: config.plugins,
+	} as InnoConfig;
+}
+
+/**
+ * Load the inno-agent config from the resolved runtime config path.
+ */
+export function loadConfig(configPathOrDir: string): InnoConfig {
+	const configPath = configPathOrDir.endsWith(".json")
+		? configPathOrDir
+		: join(configPathOrDir, "config.json");
+	try {
+		const raw = readFileSync(configPath, "utf-8");
+		// Best-effort permission fix-up for configs written before saveConfig
+		// started enforcing 0o600 — a config that is never re-saved would
+		// otherwise stay world-readable forever.
+		try {
+			chmodSync(configPath, 0o600);
+		} catch {
+			// read-only FS / Windows — permissions are best-effort
+		}
+		return normalizeConfig(unprotectConfig(JSON.parse(raw)) as LegacyInnoConfig);
+	} catch (error) {
+		throw new Error(
+			`Failed to load Inno config from ${configPath}: ${error instanceof Error ? error.message : String(error)}`,
+		);
+	}
+}
+
+export function saveConfig(configPathOrDir: string, config: InnoConfig): InnoConfig {
+	const configPath = configPathOrDir.endsWith(".json")
+		? configPathOrDir
+		: join(configPathOrDir, "config.json");
+	const normalized = normalizeConfig(config);
+	// Atomic write (tmp + rename): a crash mid-write must not leave a truncated
+	// config.json — the server hot-rewrites this file on every model switch.
+	// 0o600: the file carries plaintext provider API keys and the bridge token.
+	writeJson(configPath, protectConfig(normalized), { mode: 0o600 });
+	return normalized;
+}
+
+export function setDefaultModel(config: InnoConfig, provider: string, model: string): InnoConfig {
+	const providerId = provider.trim();
+	const modelId = model.trim();
+	if (!providerId || !modelId) throw new Error("Provider and model are required");
+	const providerConfig = config.providers[providerId];
+	if (!providerConfig) throw new Error(`Provider ${providerId} not found`);
+	if (!providerConfig.models.some((m) => m.id === modelId)) {
+		throw new Error(`Model ${providerId}/${modelId} not found in config`);
+	}
+	config.defaultProvider = providerId;
+	config.defaultModel = modelId;
+	return normalizeConfig(config);
+}
+
+export function upsertProvider(
+	config: InnoConfig,
+	providerId: string,
+	provider: InnoProviderConfig,
+	options: { makeDefault?: boolean; preserveApiKey?: boolean; preserveHeaders?: boolean } = {},
+): InnoConfig {
+	const id = providerId.trim();
+	if (!id) throw new Error("Provider id is required");
+	const existing = config.providers[id];
+	const normalized = normalizeProviderConfig({
+		...provider,
+		headers: options.preserveHeaders && existing && provider.headers === undefined
+			? existing.headers
+			: provider.headers,
+		apiKey:
+			options.preserveApiKey && existing && (!provider.apiKey || provider.apiKey.startsWith("****"))
+				? existing.apiKey
+				: provider.apiKey,
+	});
+	config.providers[id] = normalized;
+	if (options.makeDefault) {
+		config.defaultProvider = id;
+		config.defaultModel = normalized.models[0].id;
+	}
+	return normalizeConfig(config);
+}
+
+export function deleteProvider(config: InnoConfig, providerId: string): InnoConfig {
+	const id = providerId.trim();
+	if (!id) throw new Error("Provider id is required");
+	if (!config.providers[id]) throw new Error(`Provider ${id} not found`);
+	const remaining = Object.keys(config.providers).filter((k) => k !== id);
+	if (remaining.length === 0) throw new Error("Cannot delete the last provider");
+	delete config.providers[id];
+	return normalizeConfig(config);
+}
+
+/**
+ * Remove a single model from a provider. If the model was the provider's last
+ * one, the provider itself is removed. Refuses to delete the very last model
+ * across all providers (the config must always retain at least one model).
+ */
+export function deleteModel(config: InnoConfig, providerId: string, modelId: string): InnoConfig {
+	const id = providerId.trim();
+	const mid = modelId.trim();
+	if (!id) throw new Error("Provider id is required");
+	if (!mid) throw new Error("Model id is required");
+	const provider = config.providers[id];
+	if (!provider) throw new Error(`Provider ${id} not found`);
+	if (!provider.models.some((m) => m.id === mid)) throw new Error(`Model ${id}/${mid} not found`);
+	if (id === config.defaultProvider && mid === config.defaultModel) {
+		throw new Error("Cannot delete the default model; switch to another model first");
+	}
+
+	const totalModels = Object.values(config.providers).reduce((sum, p) => sum + p.models.length, 0);
+	if (totalModels <= 1) throw new Error("Cannot delete the last model");
+
+	const remainingModels = provider.models.filter((m) => m.id !== mid);
+	if (remainingModels.length === 0) {
+		delete config.providers[id];
+	} else {
+		config.providers[id] = { ...provider, models: remainingModels };
+	}
+	return normalizeConfig(config);
+}
+
+export function getConfiguredPort(config: InnoConfig, override?: number): number {
+	if (override) return override;
+	const envPort = process.env.INNO_PORT ? Number.parseInt(process.env.INNO_PORT, 10) : undefined;
+	if (envPort && Number.isFinite(envPort)) return envPort;
+	return config.server?.port ?? 3000;
+}
+
+/**
+ * Computer-use gate. Desktop GUI control only makes sense on a local install:
+ * default-on under the Electron desktop app (INNO_DESKTOP=1, set by
+ * electron/main.js), default-off everywhere else (online deployments, plain
+ * server/CLI). `plugins.computerUse.enabled` overrides in both directions.
+ */
+export function isComputerUseEnabled(config: InnoConfig): boolean {
+	const explicit = config.plugins?.computerUse?.enabled;
+	if (typeof explicit === "boolean") return explicit;
+	return process.env.INNO_DESKTOP === "1";
+}
+
+/**
+ * Codemode gate. Unlike todo/webAccess this is default-OFF everywhere
+ * (including the desktop app): it changes how tool work appears in the web
+ * trace timeline, so it is an explicit opt-in. `plugins.codemode.enabled`
+ * is the only switch.
+ */
+export function isCodemodeEnabled(config: InnoConfig): boolean {
+	return config.plugins?.codemode?.enabled === true;
+}
+
+/**
+ * Get the data directory path for the project.
+ */
+export function getDataDir(projectDir: string): string {
+	return join(projectDir, "data");
+}
+
+export function getRuntimeDataDir(paths: RuntimePaths): string {
+	return paths.dataDir;
+}
+
+/**
+ * Get the learner data directory path.
+ */
+export function getLearnerDataDir(projectDir: string): string {
+	return join(projectDir, "data", "learner");
+}
+
+/**
+ * Get the session directory path.
+ */
+export function getSessionDir(projectDir: string): string {
+	return join(projectDir, "data", "sessions");
+}
+
+/**
+ * Get the jobs directory path.
+ */
+export function getJobsDir(projectDir: string): string {
+	return join(projectDir, "data", "jobs");
+}
+
+/**
+ * Get the Inno Agent skills directory loaded by the PI resource loader.
+ */
+export function getSkillsDir(projectDir: string): string {
+	return join(projectDir, ".inno", "skills");
+}
+
+/**
+ * Get the L2 Wiki memory data directory path.
+ */
+export function getL2DataDir(projectDir: string): string {
+	return join(projectDir, "data", "l2");
+}
+

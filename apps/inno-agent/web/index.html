@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN" class="h-full">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
+		<meta name="theme-color" content="#f6f8fa" />
+		<link rel="manifest" href="/manifest.webmanifest" />
+		<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+		<link rel="apple-touch-icon" href="/icons/icon-192.png" />
+		<meta name="apple-mobile-web-app-capable" content="yes" />
+		<meta name="apple-mobile-web-app-title" content="Scoreler" />
+		<title>Scoreler</title>
+		<script>
+			// Apply theme before first paint to prevent flash of wrong theme (FOWT).
+			(function () {
+				try {
+					var t = localStorage.getItem("scoreler.theme") || "light";
+					if (t !== "light" && t !== "dark") t = "light";
+					document.documentElement.setAttribute("data-theme", t);
+					if (t === "dark") document.documentElement.classList.add("dark");
+				} catch (e) {}
+			})();
+		</script>
+	</head>
+	<body class="h-full m-0 bg-background text-foreground">
+		<div id="root" class="h-full"></div>
+		<script type="module" src="/src/main.tsx"></script>
+	</body>
+</html>
+

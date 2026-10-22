@@ -1,0 +1,5 @@
+import React from 'react';
+import {it,expect,vi} from 'vitest';
+import {render,screen,fireEvent} from '@testing-library/react';
+import {ChatActivity} from './ChatActivity.js';
+it('shows live tools, folds when finished and allows history expansion without private reasoning',()=>{const message={role:'assistant' as const,content:'Answer',timestamp:1,thinking:'private chain of thought',tools:[{toolCallId:'one',toolName:'student_search',args:{query:'chemistry',apiKey:'secret-value'}}]};const {rerender}=render(<ChatActivity message={message} active thinking={false} en/>);expect(screen.getByRole('button').getAttribute('aria-expanded')).toBe('true');expect(screen.getByText('Running…')).toBeTruthy();rerender(<ChatActivity message={{...message,tools:[{...message.tools[0],result:'Found notes'}]}} active={false} thinking={false} en/>);const toggle=screen.getByRole('button');expect(toggle.getAttribute('aria-expanded')).toBe('false');fireEvent.click(toggle);expect(screen.getByText('Found notes')).toBeTruthy();expect(document.body.textContent).not.toContain('private chain of thought');expect(document.body.textContent).not.toContain('secret-value');});

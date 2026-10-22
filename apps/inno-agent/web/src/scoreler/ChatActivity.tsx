@@ -1,0 +1,10 @@
+import {useEffect,useState} from 'react';
+import {ChevronRight,Check,LoaderCircle,Wrench} from 'lucide-react';
+import type {ChatMessage} from '../types/chat.js';
+const printable=(value:unknown)=>{try{if(typeof value==='string')return value.slice(0,16000);return JSON.stringify(value,(key,item)=>/api.?key|token|secret|password|authorization/i.test(key)?'[redacted]':item,2)?.slice(0,16000)??'';}catch{return String(value);}};
+export function ChatActivity({message,active,thinking,en}:{message:ChatMessage;active:boolean;thinking:boolean;en:boolean}){
+ const tools=message.tools??[];const hasThinking=thinking||!!message.thinking||message.traceEvents?.some(item=>String(item.event.type).startsWith('thinking_'));
+ const [expanded,setExpanded]=useState(active);useEffect(()=>setExpanded(active),[active]);
+ if(!active&&!tools.length&&!hasThinking)return null;
+ return <section className="chat-activity"><button type="button" className="activity-toggle" aria-expanded={expanded} onClick={()=>setExpanded(!expanded)}>{active?<LoaderCircle size={14} className="activity-spinner"/>:<Check size={14}/>}<span>{active?(thinking?(en?'Thinking…':'正在思考…'):(en?'Working…':'正在处理…')):(en?'Activity completed':'处理完成')}{tools.length>0&&` · ${en?`${tools.length} tools used`:`使用了 ${tools.length} 个工具`}`}</span><ChevronRight size={14} className={expanded?'expanded':''}/></button>{expanded&&<div className="activity-history">{hasThinking&&<p className="activity-thinking">{thinking?(en?'Thinking…':'正在思考…'):(en?'Thinking finished':'思考已完成')}<small>{en?'Internal reasoning is private; tool activity is shown below.':'内部推理不展示；下方可查看工具使用记录。'}</small></p>}{tools.map(tool=>{const running=active&&tool.result===undefined;return <details key={tool.toolCallId} className="activity-tool"><summary><Wrench size={13}/><span>{tool.toolName.replace(/^student_/,'').replaceAll('_',' ')}</span><small>{running?(en?'Running…':'运行中…'):tool.isError?(en?'Failed':'失败'):(en?'Completed':'已完成')}</small></summary><div><h4>{en?'Input':'输入'}</h4><pre>{printable(tool.args)}</pre>{tool.result!==undefined&&<><h4>{en?'Result':'结果'}</h4><pre>{printable(tool.result)}</pre></>}</div></details>;})}</div>}</section>;
+}

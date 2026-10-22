@@ -1,0 +1,4 @@
+import {describe,it,expect} from 'vitest';
+import {validateLesson} from './videos.js';
+const lesson={title:'Atoms',subject:'Chemistry',language:'en',sources:['notes.md'],scenes:[{title:'Atomic number',bullets:['Count the protons'],narration:'Atomic number counts the protons.',seconds:6,visual:'atom',source:'notes.md'}]};
+describe('structured teaching videos',()=>{it('accepts a cited lesson and drops executable extra properties',()=>{const v=validateLesson({...lesson,code:'throw new Error()'});expect(v.scenes[0].source).toBe('notes.md');expect('code' in v).toBe(false);});it('rejects unsupported visuals, misleading citations and unreadable scenes',()=>{expect(()=>validateLesson({...lesson,scenes:[{...lesson.scenes[0],visual:'javascript'}]})).toThrow();expect(()=>validateLesson({...lesson,sources:[]})).toThrow('citation');expect(()=>validateLesson({...lesson,scenes:[{...lesson.scenes[0],bullets:['a','b','c','d']}]})).toThrow();});});

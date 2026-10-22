@@ -1,0 +1,240 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const mocks = vi.hoisted(() => ({
+	listSessions: vi.fn(),
+	getSession: vi.fn(),
+	createSession: vi.fn(),
+	activateSession: vi.fn(),
+	getChatStatus: vi.fn(),
+	preloadMermaidMarkdownRuntime: vi.fn(),
+	abortChat: vi.fn(),
+	chatDetach: vi.fn(),
+	chatClear: vi.fn(),
+	chatLoadHistory: vi.fn(),
+	chatSetLoadingHistory: vi.fn(),
+	chatShowError: vi.fn(),
+}));
+
+vi.mock("../api/sessions.js", () => ({
+	listSessions: mocks.listSessions,
+	getSession: mocks.getSession,
+	createSession: mocks.createSession,
+	activateSession: mocks.activateSession,
+	archiveSession: vi.fn(),
+	deleteSession: vi.fn(),
+	generateSessionName: vi.fn(),
+	unarchiveSession: vi.fn(),
+	updateSessionName: vi.fn(),
+}));
+vi.mock("../api/chat.js", () => ({ getChatStatus: mocks.getChatStatus, abortChat: mocks.abortChat }));
+vi.mock("../api/workspaces.js", () => ({ getSessionWorkspace: vi.fn().mockResolvedValue({ workspaceId: "workspace-1" }) }));
+vi.mock("./chat-store.js", () => ({
+	chatStore: {
+		messages: [],
+		isLoadingHistory: false,
+		isSending: false,
+		detach: mocks.chatDetach,
+		clear: mocks.chatClear,
+		loadHistory: mocks.chatLoadHistory,
+		setLoadingHistory: mocks.chatSetLoadingHistory,
+		showError: mocks.chatShowError,
+		resumeStream: vi.fn(),
+	},
+}));
+vi.mock("./workspace-store.js", () => ({ workspaceStore: { setActiveWorkspace: vi.fn() } }));
+vi.mock("./workspaces-store.js", () => ({ workspacesStore: { load: vi.fn() } }));
+vi.mock("./terminal-store.js", () => ({ terminalStore: { disconnect: vi.fn() } }));
+vi.mock("../utils/mermaid-runtime.js", () => ({
+	hasMermaidFence: (content: string) => /```mermaid\b/i.test(content),
+	preloadMermaidMarkdownRuntime: mocks.preloadMermaidMarkdownRuntime,
+}));
+
+import { SessionsStoreImpl } from "./sessions-store.js";
+import { ApiError } from "../api/client.js";
+
+function session(id: string) {
+	return {
+		id,
+		name: id,
+		createdAt: "2026-01-01",
+		updatedAt: "2026-01-01",
+		messageCount: 0,
+		preview: "",
+		channels: [],
+		messages: [],
+		sessionRevision: "0:0",
+	};
+}
+
+describe("SessionsStore navigation", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		let href = "http://localhost/";
+		Object.defineProperty(globalThis, "window", {
+			configurable: true,
+			value: {
+				location: { get href() { return href; }, set href(value: string) { href = value; } },
+				history: {
+					pushState: vi.fn((_state, _title, url: URL) => { href = url.toString(); }),
+					replaceState: vi.fn((_state, _title, url: URL) => { href = url.toString(); }),
+				},
+			},
+		});
+		mocks.listSessions.mockResolvedValue([]);
+		mocks.activateSession.mockResolvedValue({ active: true });
+		mocks.getChatStatus.mockResolvedValue({ found: false });
+		mocks.preloadMermaidMarkdownRuntime.mockResolvedValue(undefined);
+	});
+
+	it("writes the created session to the URL before the first send can continue", async () => {
+		mocks.createSession.mockResolvedValue({ id: "created.jsonl", active: true, workspaceId: "workspace-1" });
+		const store = new SessionsStoreImpl();
+		await store.createSessionWith({ workspaceId: "workspace-1" });
+		expect(store.currentSessionId).toBe("created.jsonl");
+		expect(new URL(window.location.href).searchParams.get("session")).toBe("created.jsonl");
+		expect(window.history.replaceState).toHaveBeenCalled();
+	});
+
+	it("signals context usage after the session runtime is activated", async () => {
+		mocks.getSession.mockResolvedValue(session("active.jsonl"));
+		const store = new SessionsStoreImpl();
+		await store.openSession("active.jsonl", { historyMode: "none" });
+		expect(store.contextUsageRevision).toBe(1);
+	});
+
+	it("keeps refreshing while a preview topic waits for its upgrade", async () => {
+		vi.useFakeTimers();
+		try {
+			const preview = { ...session("topic.jsonl"), hasTopic: true, topicPendingUpgrade: true };
+			mocks.listSessions
+				.mockResolvedValueOnce([preview])
+				.mockResolvedValueOnce([{ ...preview, topicPendingUpgrade: false }]);
+			const store = new SessionsStoreImpl();
+			const refreshing = store.refreshUntilTopic("topic.jsonl");
+
+			await Promise.resolve();
+			await Promise.resolve();
+			expect(mocks.listSessions).toHaveBeenCalledTimes(1);
+			await vi.advanceTimersByTimeAsync(2_000);
+			await refreshing;
+
+			expect(mocks.listSessions).toHaveBeenCalledTimes(2);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("returns to the welcome page on a popstate URL without a session", () => {
+		const store = new SessionsStoreImpl();
+		store.currentSessionId = "a.jsonl";
+		store.showWelcomeFromHistory();
+		expect(store.currentSessionId).toBeNull();
+		expect(store.pendingNewSession).toBe(true);
+		expect(mocks.chatDetach).toHaveBeenCalled();
+		expect(window.history.replaceState).not.toHaveBeenCalled();
+	});
+
+	it("does not let a stale open request overwrite a newer session", async () => {
+		let resolveA!: (value: ReturnType<typeof session>) => void;
+		const a = new Promise<ReturnType<typeof session>>((resolve) => { resolveA = resolve; });
+		mocks.getSession.mockImplementation((id: string) => id === "a.jsonl" ? a : Promise.resolve(session("b.jsonl")));
+		const store = new SessionsStoreImpl();
+		const openingA = store.openSession("a.jsonl", { historyMode: "none" });
+		await Promise.resolve();
+		await store.openSession("b.jsonl", { historyMode: "none" });
+		resolveA(session("a.jsonl"));
+		await openingA;
+		expect(store.currentSessionId).toBe("b.jsonl");
+		expect(mocks.chatLoadHistory).toHaveBeenLastCalledWith([], "b.jsonl");
+	});
+
+	it("waits for the Mermaid runtime before publishing Mermaid history", async () => {
+		const messages = [{
+			role: "assistant" as const,
+			content: "```mermaid\nflowchart LR\nA-->B\n```",
+			timestamp: Date.now(),
+		}];
+		mocks.getSession.mockResolvedValue({ ...session("mermaid.jsonl"), messages });
+
+		let resolveRuntime!: () => void;
+		mocks.preloadMermaidMarkdownRuntime.mockReturnValue(new Promise<void>((resolve) => { resolveRuntime = resolve; }));
+		const store = new SessionsStoreImpl();
+		const opening = store.openSession("mermaid.jsonl", { historyMode: "none" });
+		await vi.waitFor(() => expect(mocks.preloadMermaidMarkdownRuntime).toHaveBeenCalled());
+		expect(mocks.chatLoadHistory).toHaveBeenLastCalledWith([], "mermaid.jsonl");
+
+		resolveRuntime();
+		await opening;
+		expect(mocks.chatLoadHistory).toHaveBeenLastCalledWith(messages, "mermaid.jsonl");
+	});
+
+	it("publishes cached Mermaid history after the runtime preload instead of clearing the view", async () => {
+		const messages = [{
+			role: "assistant" as const,
+			content: "```mermaid\nflowchart LR\nA-->B\n```",
+			timestamp: Date.now(),
+		}];
+		mocks.getSession.mockResolvedValue({ ...session("mermaid.jsonl"), messages });
+		mocks.preloadMermaidMarkdownRuntime.mockResolvedValue(undefined);
+		const store = new SessionsStoreImpl();
+		await store.openSession("mermaid.jsonl", { historyMode: "none" });
+		expect(mocks.chatLoadHistory).toHaveBeenLastCalledWith(messages, "mermaid.jsonl");
+
+		// Re-opening the same session hits the message cache. The cached history
+		// must wait for the Mermaid runtime, but the view is never cleared into
+		// the empty loading state and no refetch is needed to get the ordering.
+		mocks.chatLoadHistory.mockClear();
+		mocks.chatSetLoadingHistory.mockClear();
+		let resolveRuntime!: () => void;
+		mocks.preloadMermaidMarkdownRuntime.mockReturnValue(new Promise<void>((resolve) => { resolveRuntime = resolve; }));
+		const reopening = store.openSession("mermaid.jsonl", { historyMode: "none" });
+		await vi.waitFor(() => expect(mocks.preloadMermaidMarkdownRuntime).toHaveBeenCalledTimes(2));
+		expect(mocks.chatLoadHistory).not.toHaveBeenCalled();
+		expect(mocks.chatSetLoadingHistory).not.toHaveBeenCalledWith(true);
+
+		resolveRuntime();
+		await vi.waitFor(() => expect(mocks.chatLoadHistory).toHaveBeenCalledWith(messages, "mermaid.jsonl"));
+		await reopening;
+	});
+
+	it("beginNewSession invalidates an in-flight openSession", async () => {
+		let resolveA!: (value: ReturnType<typeof session>) => void;
+		const a = new Promise<ReturnType<typeof session>>((resolve) => { resolveA = resolve; });
+		mocks.getSession.mockImplementation((id: string) => id === "a.jsonl" ? a : Promise.resolve(session(id)));
+		const store = new SessionsStoreImpl();
+		store.currentSessionId = "x.jsonl";
+		const openingA = store.openSession("a.jsonl", { historyMode: "none" });
+		await Promise.resolve();
+		store.beginNewSession();
+		resolveA(session("a.jsonl"));
+		await openingA;
+		expect(store.currentSessionId).toBeNull();
+		expect(store.pendingNewSession).toBe(true);
+		expect(mocks.chatSetLoadingHistory).toHaveBeenCalledWith(false);
+	});
+
+	it("surfaces a busy blocker when session creation hits a queue-blocked 409", async () => {
+		mocks.createSession.mockRejectedValue(
+			new ApiError(409, "session_busy", { error: "session_busy", blocking: { sessionId: "old.jsonl", turnId: "t-1", questionPending: true } }),
+		);
+		const store = new SessionsStoreImpl();
+		await store.createSessionWith({ workspaceId: "workspace-1" });
+		expect(store.busyBlocker).toEqual({ sessionId: "old.jsonl", turnId: "t-1", questionPending: true });
+		expect(store.currentSessionId).toBeNull();
+		expect(mocks.chatShowError).not.toHaveBeenCalled();
+	});
+
+	it("stopBusyBlockerAndRetry aborts the blocking turn and retries creation", async () => {
+		mocks.createSession
+			.mockRejectedValueOnce(new ApiError(409, "session_busy", { error: "session_busy", blocking: { sessionId: "old.jsonl", turnId: "t-1" } }))
+			.mockResolvedValueOnce({ id: "new.jsonl", active: true, workspaceId: "workspace-1" });
+		mocks.abortChat.mockResolvedValue(undefined);
+		const store = new SessionsStoreImpl();
+		await store.createSessionWith({ workspaceId: "workspace-1" });
+		expect(store.busyBlocker?.turnId).toBe("t-1");
+		await store.stopBusyBlockerAndRetry();
+		expect(mocks.abortChat).toHaveBeenCalledWith("old.jsonl", "t-1");
+		expect(store.currentSessionId).toBe("new.jsonl");
+		expect(store.busyBlocker).toBeNull();
+	});
+});

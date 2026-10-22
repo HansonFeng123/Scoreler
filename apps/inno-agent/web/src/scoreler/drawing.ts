@@ -1,0 +1,6 @@
+export * from '../../../src/shared/drawing.js';
+
+import type {DrawingElement,Point} from '../../../src/shared/drawing.js';
+export type ImageCorner='nw'|'ne'|'sw'|'se';
+export function imageCorners(element:DrawingElement){const [a,b]=element.points,x=Math.min(a.x,b.x),y=Math.min(a.y,b.y),right=Math.max(a.x,b.x),bottom=Math.max(a.y,b.y);return {nw:{x,y},ne:{x:right,y},sw:{x,y:bottom},se:{x:right,y:bottom}};}
+export function resizeImage(element:DrawingElement,corner:ImageCorner,p:Point):DrawingElement{const corners=imageCorners(element),opposite={nw:'se',ne:'sw',sw:'ne',se:'nw'} as const,anchor=corners[opposite[corner]],w=Math.max(1,corners.se.x-corners.nw.x),h=Math.max(1,corners.se.y-corners.nw.y),sx=corner.endsWith('e')?1:-1,sy=corner.startsWith('s')?1:-1;const maxScale=Math.min((sx>0?1600-anchor.x:anchor.x)/w,(sy>0?1000-anchor.y:anchor.y)/h),minScale=Math.min(maxScale,Math.max(24/w,24/h)),scale=Math.max(minScale,Math.min(maxScale,((p.x-anchor.x)*sx*w+(p.y-anchor.y)*sy*h)/(w*w+h*h)));const moving={x:anchor.x+sx*w*scale,y:anchor.y+sy*h*scale};return {...element,points:[{x:Math.min(anchor.x,moving.x),y:Math.min(anchor.y,moving.y)},{x:Math.max(anchor.x,moving.x),y:Math.max(anchor.y,moving.y)}]};}

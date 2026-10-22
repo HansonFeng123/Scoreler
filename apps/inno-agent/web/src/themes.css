@@ -1,0 +1,104 @@
+/*
+ * Theme presets — each [data-theme] block overrides the --inno-* variables.
+ * :root in app.css provides the fallback (= light theme).
+ *
+ * Two themes only: light (default) and dark, following the InnoSpark harness
+ * design language (Gemini-style). Legacy themes (warm/ocean/innospark) were
+ * retired; stored legacy values migrate to light in theme-store.
+ */
+
+/* ─── Light (default) ─── */
+:root[data-theme="light"] {
+	--inno-background: #ffffff;
+	--inno-surface: #ffffff;
+	--inno-surface-muted: #f1f4f9;
+	--inno-surface-raised: #fbfcfe;
+	--inno-sidebar-bg: #f8fafd;
+	--inno-sidebar-active: #dde3ea;
+	--inno-chat-bg: #ffffff;
+	--inno-workspace-bg: #f8fafd;
+	--inno-workspace-chrome: #f1f4f9;
+	--inno-border: #e5e9f0;
+	--inno-border-strong: #d5dae2;
+	--inno-text: #1f1f1f;
+	--inno-text-muted: #444746;
+	--inno-text-subtle: #5f6368;
+	--inno-accent: #0b57d0;
+	--inno-accent-soft: #e8f0fe;
+	--inno-tech: #0b57d0;
+	--inno-success: #137333;
+	--inno-warning: #b06000;
+	--inno-danger: #c5221f;
+	--inno-shadow-soft: 0 1px 2px rgba(60, 64, 67, 0.06), 0 8px 24px rgba(60, 64, 67, 0.08);
+	--inno-ring: 0 0 0 3px rgba(11, 87, 208, 0.14);
+	--inno-scrollbar-thumb: rgba(60, 64, 67, 0.16);
+	--inno-scrollbar-thumb-hover: rgba(60, 64, 67, 0.28);
+	--inno-selection-bg: rgba(11, 87, 208, 0.12);
+	--inno-grid-color: rgba(31, 35, 40, 0.025);
+
+	/* Brand & decorative tokens (InnoSpark harness) */
+	--inno-brand-1: #6b93ff;
+	--inno-brand-2: #584cff;
+	--inno-glow-1: rgba(168, 199, 250, 0.55);
+	--inno-glow-2: rgba(198, 218, 251, 0.35);
+	--inno-glow-3: rgba(230, 240, 254, 0.18);
+	--inno-user-bubble-bg: #e9eef6;
+	--inno-card-bg: #ffffff;
+	--inno-chip-bg: #f1f4f9;
+	--inno-primary-bg: #1f1f1f;
+	--inno-primary-fg: #ffffff;
+	--inno-primary-bg-hover: #000000;
+	--inno-send-bg: #1f1f1f;
+	--inno-send-fg: #ffffff;
+	--inno-send-bg-hover: #000000;
+	--inno-shadow-composer: 0 1px 3px rgba(60, 64, 67, 0.18), 0 4px 12px rgba(60, 64, 67, 0.10);
+	color-scheme: light;
+}
+
+/* ─── Dark ─── */
+:root[data-theme="dark"] {
+	--inno-background: #131415;
+	--inno-surface: #1e2023;
+	--inno-surface-muted: #2a2c30;
+	--inno-surface-raised: #26282d;
+	--inno-sidebar-bg: #17181b;
+	--inno-sidebar-active: #33363c;
+	--inno-chat-bg: #131415;
+	--inno-workspace-bg: #17181b;
+	--inno-workspace-chrome: #26282d;
+	--inno-border: #3a3d42;
+	--inno-border-strong: #4a4e55;
+	--inno-text: #e8eaed;
+	--inno-text-muted: #c4c7cb;
+	--inno-text-subtle: #9aa0a6;
+	--inno-accent: #a8c7fa;
+	--inno-accent-soft: #26364a;
+	--inno-tech: #a8c7fa;
+	--inno-success: #81c995;
+	--inno-warning: #f9ab00;
+	--inno-danger: #f28b82;
+	--inno-shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+	--inno-ring: 0 0 0 3px rgba(168, 199, 250, 0.25);
+	--inno-scrollbar-thumb: rgba(232, 234, 237, 0.18);
+	--inno-scrollbar-thumb-hover: rgba(232, 234, 237, 0.3);
+	--inno-selection-bg: rgba(168, 199, 250, 0.25);
+	--inno-grid-color: rgba(232, 234, 237, 0.04);
+
+	/* Brand & decorative tokens (InnoSpark harness) */
+	--inno-brand-1: #8ab4f8;
+	--inno-brand-2: #c58af9;
+	--inno-glow-1: rgba(138, 180, 248, 0.16);
+	--inno-glow-2: rgba(197, 138, 249, 0.08);
+	--inno-glow-3: rgba(138, 180, 248, 0.04);
+	--inno-user-bubble-bg: #26282d;
+	--inno-card-bg: #1e2023;
+	--inno-chip-bg: #2a2c30;
+	--inno-primary-bg: #ffffff;
+	--inno-primary-fg: #1f1f1f;
+	--inno-primary-bg-hover: #ffffff;
+	--inno-send-bg: #e8eaed;
+	--inno-send-fg: #1f1f1f;
+	--inno-send-bg-hover: #ffffff;
+	--inno-shadow-composer: 0 1px 3px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.3);
+	color-scheme: dark;
+}

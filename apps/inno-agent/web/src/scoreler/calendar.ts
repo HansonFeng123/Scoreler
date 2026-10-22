@@ -1,0 +1,6 @@
+import type { StudyEvent } from '../../../src/scoreler/store.js';
+export type CalendarViewMode='month'|'week'|'day';
+export function localDayKey(date:Date){return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;}
+export function calendarDays(anchor:Date,view:CalendarViewMode){const start=new Date(anchor);start.setHours(0,0,0,0);if(view==='month')start.setDate(1);if(view!=='day')start.setDate(start.getDate()-((start.getDay()+6)%7));return Array.from({length:view==='month'?42:view==='week'?7:1},(_,index)=>{const d=new Date(start);d.setDate(d.getDate()+index);return d;});}
+export function shiftCalendar(anchor:Date,view:CalendarViewMode,amount:number){const d=new Date(anchor);if(view==='month'){const day=d.getDate();d.setDate(1);d.setMonth(d.getMonth()+amount);const last=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();d.setDate(Math.min(day,last));}else d.setDate(d.getDate()+amount*(view==='week'?7:1));return d;}
+export function eventsOnDate(events:StudyEvent[],date:Date){const start=new Date(date);start.setHours(0,0,0,0);const end=new Date(start);end.setDate(end.getDate()+1);return events.filter(event=>Date.parse(event.start)<end.getTime()&&Date.parse(event.end)>start.getTime()).sort((a,b)=>Date.parse(a.start)-Date.parse(b.start));}

@@ -1,0 +1,121 @@
+/* Agent command bubble styles are isolated from app.css so unrelated chat
+   surfaces, including Thinking & tool calls, keep their existing treatment. */
+:root {
+	--inno-smart-agent-bc: #8b5cf6;
+}
+
+/* Slash palette layout is specific to the command picker. */
+.inno-slash-palette {
+	right: 0;
+	left: 0;
+	width: auto;
+	max-height: var(--inno-slash-palette-max-height, 288px);
+	transform-origin: bottom left;
+}
+.inno-slash-palette-list {
+	max-height: calc(var(--inno-slash-palette-max-height, 288px) - 12px);
+	overflow-y: auto;
+}
+
+/* Keep sent file references centered on the text baseline while correcting
+   the one-pixel optical offset in the existing file bubble. */
+.inno-smart-ref-word {
+	vertical-align: middle;
+}
+.inno-smart-file-ref-bubble {
+	transform: translateY(-1px);
+}
+
+/* Shared Agent bubble surface. Composer and sent-message Agent bubbles use
+   this class so their visual treatment stays identical. */
+.inno-smart-agent-surface {
+	box-sizing: border-box;
+	height: 20px;
+	gap: 3px;
+	padding: 0 7px 0 6px;
+	border-radius: 9999px;
+	border: 1px solid color-mix(in srgb, var(--smart-bc, var(--inno-smart-agent-bc)) 60%, transparent);
+	background: color-mix(in srgb, var(--smart-bc, var(--inno-smart-agent-bc)) 12%, var(--inno-surface));
+	font-size: 11.5px;
+	font-weight: 600;
+	line-height: 18px;
+	white-space: nowrap;
+	color: color-mix(in srgb, var(--smart-bc, var(--inno-smart-agent-bc)) 78%, var(--inno-text));
+	box-shadow: 0 1px 2px color-mix(in srgb, var(--inno-text) 8%, transparent);
+}
+.inno-smart-agent-surface > svg {
+	flex: 0 0 auto;
+	width: 11px;
+	height: 11px;
+}
+.inno-smart-agent-surface:hover {
+	background: color-mix(in srgb, var(--smart-bc, var(--inno-smart-agent-bc)) 18%, var(--inno-surface));
+	border-color: var(--smart-bc, var(--inno-smart-agent-bc));
+}
+.inno-smart-agent-ref-bubble {
+	max-width: min(100%, 38rem);
+}
+.inno-smart-agent-ref-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.inno-smart-agent-ref-content {
+	display: inline-flex;
+	max-width: 100%;
+	align-items: center;
+	gap: 6px;
+	flex-wrap: wrap;
+	vertical-align: middle;
+}
+.inno-smart-agent-ref-name,
+.inno-smart-agent-ref-args {
+	min-width: 0;
+	max-width: 100%;
+	overflow-wrap: anywhere;
+}
+.inno-smart-agent-ref-args {
+	white-space: pre-wrap;
+}
+button.inno-smart-agent-ref-bubble {
+	cursor: pointer;
+	font-family: inherit;
+	text-align: left;
+}
+
+/* Agent command picker sizing and two-column skill descriptions. */
+.inno-smart-panel--agent {
+	box-sizing: border-box;
+	width: min(440px, calc(100vw - 32px));
+	padding: 8px;
+}
+.inno-smart-agent-list {
+	max-height: 212px;
+}
+.inno-smart-agent-skill-title {
+	position: relative;
+	min-width: 0;
+	flex: 1 1 52%;
+	overflow: hidden;
+}
+.inno-smart-agent-description {
+	min-width: 0;
+	flex: 0 1 48%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 10.5px;
+	color: var(--inno-text-subtle);
+}
+
+/* Agent command names must remain fully visible in the composer bubble. */
+.inno-smart-chip.is-agent .inno-smart-chip-word {
+	overflow: visible;
+	text-overflow: clip;
+	white-space: nowrap;
+}
+.inno-smart-agent-mark {
+	flex: 0 0 auto;
+	font-size: 10px;
+	line-height: 1;
+	display: block;
+}

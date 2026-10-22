@@ -1,0 +1,7 @@
+const fs=require('node:fs'),path=require('node:path');
+function read(file,fallback=null){try{return JSON.parse(fs.readFileSync(file,'utf8'));}catch{return fallback;}}
+function validCandidate(home,value){if(!value||!/^[a-f0-9]{40}$/.test(value.commit)||value.directory!=='source-'+value.commit)return null;const root=path.join(home,'updates',value.directory);if(!fs.existsSync(path.join(root,'node_modules/electron/dist/electron.exe'))||!fs.existsSync(path.join(root,'apps/inno-agent/web/dist/index.html')))return null;return root;}
+function activatePending(home){const base=path.join(home,'updates'),pending=read(path.join(base,'pending.json'));if(!validCandidate(home,pending))return null;const backup=path.join(base,'backups',new Date().toISOString().replace(/[:.]/g,'-'));fs.mkdirSync(backup,{recursive:true});
+ for(const name of fs.readdirSync(home)){if(['updates','Cache','Code Cache','GPUCache','DawnGraphiteCache','DawnWebGPUCache','SingletonLock','SingletonCookie','SingletonSocket'].includes(name))continue;fs.cpSync(path.join(home,name),path.join(backup,name),{recursive:true});}
+ fs.writeFileSync(path.join(base,'ready.json.tmp'),JSON.stringify({...pending,backup}));fs.renameSync(path.join(base,'ready.json.tmp'),path.join(base,'ready.json'));fs.unlinkSync(path.join(base,'pending.json'));fs.writeFileSync(path.join(base,'status.json'),JSON.stringify({state:'idle',target:pending.commit}));return {commit:pending.commit,backup};}
+module.exports={read,validCandidate,activatePending};

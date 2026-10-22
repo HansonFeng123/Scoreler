@@ -1,0 +1,5 @@
+const {test}=require('node:test');const assert=require('node:assert/strict');const {dueReminders}=require('./reminders.cjs');
+const now=Date.parse('2026-10-20T08:00:00+08:00');const event=(kind,minutes,completed=false)=>({id:kind,start:new Date(now+minutes*60000).toISOString(),kind,title:'Task',completed});
+test('class reminder fires five minutes before start only',()=>{assert.equal(dueReminders([event('lesson',5)],now,now-15000)[0].minutes,5);assert.equal(dueReminders([event('lesson',15)],now,now-15000).length,0);});
+test('homework reminds at 60, 15 and 5 minutes and catches a delayed poll',()=>{for(const min of [60,15,5])assert.equal(dueReminders([event('assignment',min)],now,now-15000)[0].minutes,min);assert.equal(dueReminders([event('assignment',15)],now+10000,now-10000)[0].minutes,15);});
+test('ignores completed, old, already-crossed and invalid events',()=>{assert.equal(dueReminders([event('assignment',5,true),event('assignment',-5),event('lesson',4),event('study',5),{id:'bad',kind:'lesson',start:'bad'}],now,now-15000).length,0);assert.equal(dueReminders([event('assignment',5)],now,now).length,0);});

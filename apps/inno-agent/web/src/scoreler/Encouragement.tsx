@@ -1,0 +1,6 @@
+import {useState,useEffect} from 'react';
+const sayings=[
+ ['Small steps still move you forward.','小小的一步，也是在向前。'],['You do not need to finish everything to make progress.','不必一次完成所有事，进步已经在发生。'],['One clear question can open a new door.','一个清晰的问题，能打开一扇新的门。'],['Give yourself time to understand.','给自己一点理解的时间。'],['A little practice today makes tomorrow easier.','今天的一点练习，会让明天轻松一些。'],['Rest is part of learning, too.','休息也是学习的一部分。'],['Start with the next manageable thing.','先从下一件做得到的小事开始。'],['Curiosity is a good place to begin.','好奇心，就是很好的起点。'],['Your pace can be your own.','按照自己的节奏，也能走得很远。'],['Mistakes show you what to try next.','错题在告诉你，下一步可以尝试什么。']
+];
+export function chooseEncouragement(previous:number,random=Math.random){const n=sayings.length;if(previous<0||previous>=n)return Math.floor(random()*n);const draw=Math.floor(random()*(n-1));return draw>=previous?draw+1:draw;}
+export function Encouragement({en}:{en:boolean}){const [index]=useState(()=>{const previous=sessionStorage.getItem('scoreler.encouragement');const next=chooseEncouragement(previous===null?-1:Number(previous));return next;});useEffect(()=>{sessionStorage.setItem('scoreler.encouragement',String(index));},[index]);return <p className="home-encouragement"><span aria-hidden="true">✦</span>{sayings[index][en?0:1]}</p>;}

@@ -1,0 +1,137 @@
+import { existsSync, statSync } from "node:fs";
+import { extname, resolve } from "node:path";
+import type { LiteParse, ParseResult, ScreenshotResult } from "@llamaindex/liteparse";
+
+// ============================================================================
+// LiteParse Wrapper — Lazy-loaded document parsing
+// ============================================================================
+
+const SUPPORTED_EXTENSIONS = new Set([
+	".pdf",
+	".docx",
+	".xlsx",
+	".pptx",
+	".png",
+	".jpg",
+	".jpeg",
+	".gif",
+	".webp",
+	".tiff",
+]);
+
+const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024; // 100MB
+
+export interface ParsedDocumentResult {
+	text: string;
+	pageCount: number;
+	pages: Array<{ pageNumber: number; text: string }>;
+}
+
+export class DocumentParseError extends Error {
+	constructor(
+		message: string,
+		public code: "FILE_NOT_FOUND" | "UNSUPPORTED_FORMAT" | "FILE_TOO_LARGE" | "PARSE_ERROR" | "EMPTY_RESULT",
+	) {
+		super(message);
+		this.name = "DocumentParseError";
+	}
+}
+
+let parserInstance: LiteParse | null = null;
+
+async function getParser(): Promise<LiteParse> {
+	if (!parserInstance) {
+		const { LiteParse: LiteParseClass } = await import("@llamaindex/liteparse");
+		parserInstance = new LiteParseClass({
+			ocrEnabled: false,
+			outputFormat: "text",
+			preciseBoundingBox: false,
+		});
+	}
+	return parserInstance;
+}
+
+function validateFile(filePath: string): void {
+	const resolved = resolve(filePath);
+
+	if (!existsSync(resolved)) {
+		throw new DocumentParseError(`文件不存在: ${resolved}`, "FILE_NOT_FOUND");
+	}
+
+	const ext = extname(resolved).toLowerCase();
+	if (!SUPPORTED_EXTENSIONS.has(ext)) {
+		throw new DocumentParseError(
+			`不支持的文件格式: ${ext}。支持的格式: ${[...SUPPORTED_EXTENSIONS].join(", ")}`,
+			"UNSUPPORTED_FORMAT",
+		);
+	}
+
+	const stat = statSync(resolved);
+	if (stat.size > MAX_FILE_SIZE_BYTES) {
+		throw new DocumentParseError(
+			`文件过大 (${(stat.size / 1024 / 1024).toFixed(1)}MB)，上限为 100MB`,
+			"FILE_TOO_LARGE",
+		);
+	}
+}
+
+/**
+ * Parse a document and extract text content.
+ */
+export async function parseDocument(filePath: string): Promise<ParsedDocumentResult> {
+	const resolved = resolve(filePath);
+	validateFile(resolved);
+
+	const parser = await getParser();
+	let result: ParseResult;
+
+	try {
+		result = await parser.parse(resolved, true);
+	} catch (err) {
+		throw new DocumentParseError(
+			`解析失败: ${err instanceof Error ? err.message : String(err)}`,
+			"PARSE_ERROR",
+		);
+	}
+
+	const text = result.text?.trim() ?? "";
+	if (!text) {
+		throw new DocumentParseError(
+			"文件解析结果为空。可能是扫描件（需要 OCR）或文件内容为空。",
+			"EMPTY_RESULT",
+		);
+	}
+
+	return {
+		text,
+		pageCount: result.pages.length,
+		pages: result.pages.map((p) => ({
+			pageNumber: p.pageNum,
+			text: p.text,
+		})),
+	};
+}
+
+/**
+ * Generate PNG screenshots of document pages.
+ */
+export async function screenshotDocument(filePath: string, pageNumbers?: number[]): Promise<ScreenshotResult[]> {
+	const resolved = resolve(filePath);
+	validateFile(resolved);
+
+	const parser = await getParser();
+
+	try {
+		return await parser.screenshot(resolved, pageNumbers, true);
+	} catch (err) {
+		throw new DocumentParseError(
+			`截图生成失败: ${err instanceof Error ? err.message : String(err)}`,
+			"PARSE_ERROR",
+		);
+	}
+}
+
+/** Check if a file extension is supported for parsing. */
+export function isSupportedFormat(filePath: string): boolean {
+	return SUPPORTED_EXTENSIONS.has(extname(filePath).toLowerCase());
+}

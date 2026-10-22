@@ -1,0 +1,514 @@
+import { EventEmitter } from "./event-emitter.js";
+import {
+	activateSession,
+	archiveSession as apiArchiveSession,
+	createSession,
+	deleteSession,
+	generateSessionName,
+	getSession,
+	listSessions,
+	unarchiveSession as apiUnarchiveSession,
+	updateSessionName,
+	type CreateSessionInput,
+	type SessionChannel,
+	type SessionMeta,
+} from "../api/sessions.js";
+import { getSessionWorkspace } from "../api/workspaces.js";
+import { abortChat, getChatStatus } from "../api/chat.js";
+import { ApiError, withTimeout } from "../api/client.js";
+import { chatStore } from "./chat-store.js";
+import type { ChatMessage, PendingQuestion } from "../types/chat.js";
+import { workspaceStore } from "./workspace-store.js";
+import { workspacesStore } from "./workspaces-store.js";
+import { terminalStore } from "./terminal-store.js";
+import { hasMermaidFence, preloadMermaidMarkdownRuntime } from "../utils/mermaid-runtime.js";
+
+interface SessionsStoreEvents {
+	change: void;
+}
+
+export type HistoryMode = "push" | "replace" | "none";
+
+/** Backoff for refreshUntilTopic (~62s total, covering slow topic models). */
+const TOPIC_REFRESH_DELAYS_MS = [2_000, 4_000, 8_000, 16_000, 32_000] as const;
+
+function hasMermaidMessage(messages: ChatMessage[]): boolean {
+	return messages.some((message) => hasMermaidFence(message.content));
+}
+
+async function waitForMermaidRuntime(messages: ChatMessage[]): Promise<void> {
+	if (!hasMermaidMessage(messages)) return;
+	try {
+		// Bound the wait: a hung chunk request must not pin history loading the
+		// way a stuck getSession would (#124); the catch below degrades to the
+		// plain-markdown path instead.
+		await withTimeout(preloadMermaidMarkdownRuntime(), 10_000, "Mermaid runtime load timed out");
+	} catch {
+		// MarkdownErrorBoundary will fall back to plain text if the optional
+		// renderer chunk cannot be loaded.
+	}
+}
+
+export class SessionsStoreImpl extends EventEmitter<SessionsStoreEvents> {
+	sessions: SessionMeta[] = [];
+	currentSessionId: string | null = null;
+	isLoading = false;
+	openingSessionId: string | null = null;
+	/** Incremented after the backend runtime finishes activating a session so
+	 * context-usage can make one definitive refresh after navigation. */
+	contextUsageRevision = 0;
+	channelFilter: SessionChannel | null = null;
+	searchQuery = "";
+	/** When true, ChatCenter shows the workspace chooser instead of opening a session. */
+	pendingNewSession = false;
+	/** When set, a new session should be pre-bound to this workspace (set from the sidebar). */
+	preselectedWorkspaceId: string | null = null;
+	private _openRequestId = 0;
+	/** Set when a queue-backed op (create/activate) got a 409 session_busy:
+	 *  another session's turn holds the shared prompt queue. The UI offers to
+	 *  stop that turn and retry. */
+	busyBlocker: { sessionId: string; turnId: string; questionPending: boolean } | null = null;
+	private _lastCreateInput: CreateSessionInput | null = null;
+	private _messageCache = new Map<string, Awaited<ReturnType<typeof getSession>>["messages"]>();
+	/** Caches an unanswered question card across session switches so it can be
+	 *  restored instantly when switching back (the backend replay/persistence
+	 *  reconciles it afterwards). Keyed by session id. */
+	private _pendingQuestionCache = new Map<string, PendingQuestion>();
+	private _backgroundRunningSessions = new Set<string>();
+
+	/**
+	 * Single source of truth for whether the chat center shows the welcome
+	 * screen (new-chat composer + workspace chooser) vs. an open session.
+	 *
+	 * The previous logic lived inline in ChatCenter and OR-ed together five
+	 * conditions split across two stores, which was fragile at transition
+	 * boundaries. Centralizing it here makes the "welcome | session" view an
+	 * explicit, testable derivation:
+	 *   - `pendingNewSession` → the user explicitly asked for a new chat.
+	 *   - an open `currentSessionId` → a real session view.
+	 *   - otherwise (no session yet) → welcome, unless the chat is mid-flight
+	 *     (loading history / streaming a just-created session) so we don't
+	 *     flash the welcome screen during the create→open transition.
+	 *
+	 * Reads chatStore live at call time; ChatCenter subscribes to both stores,
+	 * so it re-renders (and re-evaluates this) on either store's change.
+	 */
+	get isWelcomeView(): boolean {
+		if (this.pendingNewSession) return true;
+		if (this.currentSessionId) return false;
+		return chatStore.messages.length === 0 && !chatStore.isLoadingHistory && !chatStore.isSending;
+	}
+
+	get filteredSessions(): SessionMeta[] {
+		let list = this.sessions;
+		if (this.channelFilter) {
+			const ch = this.channelFilter;
+			list = list.filter((s) => s.channels.includes(ch));
+		}
+		if (this.searchQuery) {
+			const q = this.searchQuery.toLowerCase();
+			list = list.filter(
+				(s) => s.name.toLowerCase().includes(q) || s.preview.toLowerCase().includes(q),
+			);
+		}
+		return list;
+	}
+
+	get availableChannels(): SessionChannel[] {
+		const channels = new Set<SessionChannel>();
+		for (const s of this.sessions) {
+			for (const ch of s.channels) channels.add(ch);
+		}
+		return Array.from(channels).sort();
+	}
+
+	setChannelFilter(channel: SessionChannel | null) {
+		this.channelFilter = channel;
+		this.emit("change", undefined);
+	}
+
+	setSearchQuery(query: string) {
+		this.searchQuery = query;
+		this.emit("change", undefined);
+	}
+
+	async load(): Promise<void> {
+		this.isLoading = true;
+		this.emit("change", undefined);
+		try {
+			this.sessions = await listSessions();
+		} catch {
+			this.sessions = [];
+		} finally {
+			this.isLoading = false;
+			this.emit("change", undefined);
+		}
+	}
+
+	async refresh(): Promise<void> {
+		try {
+			this.sessions = await listSessions();
+			this.emit("change", undefined);
+		} catch {
+			// ignore — keep previous list
+		}
+	}
+
+	/**
+	 * Refresh the sidebar until the session's recorded topic/preview lands.
+	 *
+	 * Topic recording is fire-and-forget on the server, so the refresh that
+	 * runs at turn end can race the first-message preview or the later summary.
+	 * Poll with bounded backoff and stop once the final topic is visible (or the
+	 * session disappears). A recorded first-message preview can still be waiting
+	 * for the richer summary after the conversation reaches six messages.
+	 */
+	async refreshUntilTopic(sessionId: string): Promise<void> {
+		await this.refresh();
+		for (const delayMs of TOPIC_REFRESH_DELAYS_MS) {
+			const entry = this.sessions.find((session) => session.id === sessionId);
+			if (!entry || (entry.hasTopic && entry.topicPendingUpgrade !== true)) return;
+			await new Promise((resolve) => setTimeout(resolve, delayMs));
+			await this.refresh();
+		}
+	}
+
+	selectSession(id: string) {
+		this.currentSessionId = id;
+		this.emit("change", undefined);
+	}
+
+	async openSession(id: string, options: { historyMode?: HistoryMode } = {}): Promise<void> {
+		const requestId = ++this._openRequestId;
+		const prevSessionId = this.currentSessionId;
+
+		// Track background sessions: if the previous session was still streaming,
+		// preserve its state so we can resume when switching back.
+		if (prevSessionId && prevSessionId !== id) {
+			if (chatStore.isSending) {
+				this._backgroundRunningSessions.add(prevSessionId);
+				this._messageCache.set(prevSessionId, chatStore.messages);
+			} else {
+				this._messageCache.delete(prevSessionId);
+			}
+			// Preserve an unanswered question card so it can be restored on
+			// return. This applies to streaming sessions (live card) and to
+			// restored-but-unanswered cards alike.
+			if (chatStore.pendingQuestion) {
+				this._pendingQuestionCache.set(prevSessionId, chatStore.pendingQuestion);
+			} else {
+				this._pendingQuestionCache.delete(prevSessionId);
+			}
+		}
+
+		this.currentSessionId = id;
+		this.openingSessionId = id;
+		this.pendingNewSession = false;
+		this.syncSessionUrl(id, options.historyMode ?? "push");
+		this.emit("change", undefined);
+
+		// Detach from the current stream without stopping the backend task.
+		chatStore.detach();
+		// Drop any terminal bound to the previous session.
+		void terminalStore.disconnect();
+
+		const cached = this._messageCache.get(id);
+		if (cached) {
+			// Mermaid history must not paint before its runtime chunk arrives, or
+			// the trace rows render first and the diagram pops in a frame later.
+			// Wait for the same preload the fresh-fetch path uses, then commit
+			// the cache — no need to refetch the whole session to get ordering.
+			await waitForMermaidRuntime(cached);
+			if (requestId !== this._openRequestId) return;
+			chatStore.loadHistory(cached, id);
+		} else {
+			chatStore.loadHistory([], id);
+			chatStore.setLoadingHistory(true);
+		}
+
+		// Sync workspace binding for this session (fire and forget; UI updates via store).
+		void getSessionWorkspace(id)
+			.then((info) => {
+				if (this.currentSessionId === id) {
+					void workspaceStore.setActiveWorkspace(info.workspaceId || null);
+				}
+			})
+			.catch((err) => {
+				console.warn(`[sessions] failed to load workspace for ${id}:`, err instanceof Error ? err.message : err);
+			});
+
+			try {
+			// Hard bound on history load: without it a stuck request would pin
+			// isLoadingHistory forever ("正在加载会话…" with no way out, #124).
+			const session = await withTimeout(getSession(id), 15_000, "加载会话超时，请重试");
+			// History is committed atomically with the optional Mermaid runtime.
+			// Otherwise the trace rows render first and the markdown body appears
+			// on a later frame when the lazy chunk finishes loading.
+			const mermaidRuntimeReady = waitForMermaidRuntime(session.messages);
+			const chatStatus = await getChatStatus(id).catch((error) => {
+				console.warn(`[sessions] failed to load chat status for ${id}:`, error instanceof Error ? error.message : error);
+				return { found: false } as Awaited<ReturnType<typeof getChatStatus>>;
+			});
+			if (requestId !== this._openRequestId) return;
+			await mermaidRuntimeReady;
+			if (requestId !== this._openRequestId) return;
+
+			this._messageCache.set(id, session.messages);
+			chatStore.loadHistory(session.messages, id);
+
+			// The context-usage endpoint reads the active runtime, so let the
+			// activation finish before publishing the completed session view. This
+			// prevents the first usage request after a switch from being mistaken
+			// for a session with no usage.
+			try {
+				await withTimeout(activateSession(id), 15_000, "激活会话超时");
+				if (requestId === this._openRequestId && this.currentSessionId === id) {
+					this.contextUsageRevision += 1;
+					this.emit("change", undefined);
+				}
+			} catch (err) {
+				console.warn(`[sessions] failed to activate ${id}: ${err instanceof Error ? err.message : String(err)}`);
+			}
+
+			this._backgroundRunningSessions.delete(id);
+			if (chatStatus.stream && ["queued", "running"].includes(chatStatus.stream.status)) {
+				// The turn is live: its question event (if any) replays through the
+				// resumed stream, so no manual card restore is needed here.
+				void chatStore.resumeStream(id, chatStatus.stream);
+			} else {
+				// No live turn (e.g. after a full restart): restore the card from
+				// the local switch cache first, falling back to the server-persisted
+				// record.
+				const cached = this._pendingQuestionCache.get(id);
+				if (cached) {
+					chatStore.restorePendingQuestion(cached);
+				} else if (session.pendingQuestion) {
+					chatStore.restorePendingQuestion({
+						questionId: session.pendingQuestion.questionId,
+						params: session.pendingQuestion.params as PendingQuestion["params"],
+						sessionId: session.pendingQuestion.sessionId,
+						turnId: session.pendingQuestion.turnId,
+						restored: true,
+					});
+				}
+			}
+		} catch (error) {
+			if (requestId !== this._openRequestId) return;
+			this.currentSessionId = null;
+			this.pendingNewSession = true;
+			this._messageCache.delete(id);
+			chatStore.detach();
+			chatStore.loadHistory([]);
+			chatStore.showError(error instanceof Error ? `无法打开会话：${error.message}` : "无法打开会话");
+			this.syncSessionUrl(null, "replace");
+		} finally {
+			if (requestId === this._openRequestId) {
+				this.openingSessionId = null;
+				chatStore.setLoadingHistory(false);
+				this.emit("change", undefined);
+			}
+		}
+	}
+
+	/** Apply a browser back/forward navigation to the welcome page. */
+	showWelcomeFromHistory(): void {
+		this._openRequestId++;
+		this.currentSessionId = null;
+		this.openingSessionId = null;
+		this.pendingNewSession = true;
+		this.preselectedWorkspaceId = null;
+		chatStore.detach();
+		chatStore.loadHistory([]);
+		void terminalStore.disconnect();
+		this.emit("change", undefined);
+	}
+
+	private syncSessionUrl(sessionId: string | null, mode: HistoryMode): void {
+		if (mode === "none" || typeof window === "undefined") return;
+		const nextUrl = new URL(window.location.href);
+		if (sessionId) nextUrl.searchParams.set("session", sessionId);
+		else nextUrl.searchParams.delete("session");
+		const current = new URL(window.location.href);
+		if (nextUrl.href === current.href) return;
+		if (mode === "push") window.history.pushState({}, "", nextUrl);
+		else window.history.replaceState({}, "", nextUrl);
+	}
+
+	/**
+	 * Enter "new session" mode without yet creating a backend session.
+	 * The actual session is created when the user chooses a workspace.
+	 *
+	 * Also detaches from any in-flight chat stream so a stuck/streaming turn
+	 * can't keep `chatStore.isSending` true and block the chooser / input.
+	 */
+	beginNewSession(): void {
+		// Invalidate any in-flight openSession so its late completion can't
+		// clobber the new-session state (load old messages into it, or leave
+		// isLoadingHistory stuck on). Matches showWelcomeFromHistory.
+		this._openRequestId++;
+		chatStore.setLoadingHistory(false);
+		if (this.currentSessionId && chatStore.isSending) {
+			this._backgroundRunningSessions.add(this.currentSessionId);
+			this._messageCache.set(this.currentSessionId, chatStore.messages);
+		} else if (this.currentSessionId) {
+			this._messageCache.delete(this.currentSessionId);
+		}
+		this.currentSessionId = null;
+		this.syncSessionUrl(null, "replace");
+		this.pendingNewSession = true;
+		this.preselectedWorkspaceId = null;
+		chatStore.detach();
+		chatStore.clear();
+		void terminalStore.disconnect();
+		this.emit("change", undefined);
+	}
+
+	/**
+	 * Enter "new session" mode pre-bound to a specific workspace (from the
+	 * sidebar). ChatCenter's chooser reads `preselectedWorkspaceId` to default to
+	 * that workspace and previews it immediately.
+	 */
+	beginNewSessionIn(workspaceId: string): void {
+		this.beginNewSession();
+		this.preselectedWorkspaceId = workspaceId;
+		this.emit("change", undefined);
+	}
+
+	cancelPendingNewSession(): void {
+		this.pendingNewSession = false;
+		this.preselectedWorkspaceId = null;
+		this.emit("change", undefined);
+	}
+
+	/**
+	 * Create a session bound to a specific workspace (or new workspace), then open it.
+	 */
+	async createSessionWith(input: CreateSessionInput = {}): Promise<void> {
+		this.isLoading = true;
+		this.pendingNewSession = false;
+		this.preselectedWorkspaceId = null;
+		// Make sure no previous stream / terminal lingers.
+		if (this.currentSessionId && chatStore.isSending) {
+			this._backgroundRunningSessions.add(this.currentSessionId);
+			this._messageCache.set(this.currentSessionId, chatStore.messages);
+		}
+		chatStore.detach();
+		void terminalStore.disconnect();
+		this.emit("change", undefined);
+		try {
+			// Server answers 409 session_busy within ~8s when another session's
+			// turn holds the queue; the 45s ceiling is only a last-resort guard
+			// (first-time preset downloads can legitimately take a while).
+			const created = await withTimeout(createSession(input), 45_000, "创建会话超时，请重试");
+			this.busyBlocker = null;
+			this._lastCreateInput = null;
+			this._messageCache.clear();
+			chatStore.clear();
+			// Refresh side panels so the new workspace shows up.
+			void workspacesStore.load();
+			await this.load();
+			this.currentSessionId = created.id;
+			this.syncSessionUrl(created.id, "replace");
+			if (created.workspaceId) {
+				void workspaceStore.setActiveWorkspace(created.workspaceId);
+			}
+			this.emit("change", undefined);
+		} catch (err) {
+			const blocking = err instanceof ApiError && err.status === 409
+				? (err.data?.blocking as { sessionId: string; turnId: string; questionPending?: boolean } | undefined)
+				: undefined;
+			if (blocking?.sessionId && blocking.turnId) {
+				// Another session's turn holds the queue — offer to stop it and retry.
+				this.busyBlocker = {
+					sessionId: blocking.sessionId,
+					turnId: blocking.turnId,
+					questionPending: blocking.questionPending === true,
+				};
+				this._lastCreateInput = input;
+			} else {
+				// ChatWelcome's preset cards own the inline error and stale-card
+				// removal. Re-throw preset failures so they can distinguish them
+				// from generic session errors.
+				if (input.presetId) throw err;
+				chatStore.showError(err instanceof Error ? err.message : "创建会话失败");
+			}
+			this.emit("change", undefined);
+		} finally {
+			this.isLoading = false;
+			this.emit("change", undefined);
+		}
+	}
+
+	/** Stop the turn holding the prompt queue, then retry the session creation it blocked. */
+	async stopBusyBlockerAndRetry(): Promise<void> {
+		const blocker = this.busyBlocker;
+		if (!blocker) return;
+		try {
+			await abortChat(blocker.sessionId, blocker.turnId);
+		} catch {
+			// The turn may have ended on its own — proceed to retry regardless.
+		}
+		this.busyBlocker = null;
+		this.emit("change", undefined);
+		const input = this._lastCreateInput;
+		this._lastCreateInput = null;
+		if (input) await this.createSessionWith(input);
+	}
+
+	dismissBusyBlocker(): void {
+		this.busyBlocker = null;
+		this._lastCreateInput = null;
+		this.emit("change", undefined);
+	}
+
+	async clearSelection() {
+		// Show the workspace chooser; do not create the backend session yet.
+		this.beginNewSession();
+	}
+
+	async renameSession(id: string, name: string, generated = false): Promise<void> {
+		const updated = await updateSessionName(id, name, generated);
+		this.sessions = this.sessions.map((session) => session.id === id ? updated : session);
+		this.emit("change", undefined);
+	}
+
+	async generateSessionName(id: string): Promise<void> {
+		const updated = await generateSessionName(id);
+		this.sessions = this.sessions.map((session) => session.id === id ? updated : session);
+		this.emit("change", undefined);
+	}
+
+	async archiveSession(id: string): Promise<void> {
+		await apiArchiveSession(id);
+		this.sessions = this.sessions.map((s) => s.id === id ? { ...s, archived: true } : s);
+		this.emit("change", undefined);
+	}
+
+	async unarchiveSession(id: string): Promise<void> {
+		await apiUnarchiveSession(id);
+		this.sessions = this.sessions.map((s) => s.id === id ? { ...s, archived: false } : s);
+		this.emit("change", undefined);
+	}
+
+	async deleteSession(id: string): Promise<void> {
+		const result = await deleteSession(id);
+		this._messageCache.delete(id);
+		this._pendingQuestionCache.delete(id);
+		this._backgroundRunningSessions.delete(id);
+		this.sessions = this.sessions.filter((session) => session.id !== id);
+		if (this.currentSessionId === id) {
+			if (result.newActiveId) {
+				await this.openSession(result.newActiveId, { historyMode: "replace" });
+			} else {
+				this.syncSessionUrl(null, "replace");
+				this.showWelcomeFromHistory();
+			}
+		}
+		this.emit("change", undefined);
+		if (result.newActiveId) {
+			void this.refresh();
+		}
+	}
+}
+
+export const sessionsStore = new SessionsStoreImpl();

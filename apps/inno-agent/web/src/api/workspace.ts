@@ -1,0 +1,261 @@
+import { apiFetch } from "./client.js";
+import type { PptxPreviewResult, WorkspaceFileDetail, WorkspaceTree, WorkspaceTreeNode } from "../types/workspace.js";
+
+function qs(workspaceId?: string): string {
+	return workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : "";
+}
+
+function withWorkspace<T extends Record<string, unknown>>(body: T, workspaceId?: string): T & { workspaceId?: string } {
+	return workspaceId ? { ...body, workspaceId } : body;
+}
+
+export async function getWorkspaceTree(workspaceId?: string): Promise<WorkspaceTree> {
+	return apiFetch<WorkspaceTree>(`/api/workspace/tree${qs(workspaceId)}`);
+}
+
+export async function getWorkspaceFile(path: string, workspaceId?: string, forceText = false): Promise<WorkspaceFileDetail> {
+	const params = new URLSearchParams({ path: normalizeWorkspaceRelativePath(path) });
+	if (workspaceId) params.set("workspaceId", workspaceId);
+	if (forceText) params.set("forceText", "1");
+	return apiFetch<WorkspaceFileDetail>(`/api/workspace/file?${params.toString()}`);
+}
+
+export async function createWorkspaceItem(path: string, type: "file" | "directory", workspaceId?: string): Promise<WorkspaceTreeNode> {
+	return apiFetch<WorkspaceTreeNode>("/api/workspace/create", {
+		method: "POST",
+		body: JSON.stringify(withWorkspace({ path, type }, workspaceId)),
+	});
+}
+
+export async function renameWorkspaceItem(oldPath: string, newPath: string, workspaceId?: string): Promise<WorkspaceTreeNode> {
+	return apiFetch<WorkspaceTreeNode>("/api/workspace/rename", {
+		method: "POST",
+		body: JSON.stringify(withWorkspace({ oldPath, newPath }, workspaceId)),
+	});
+}
+
+export async function deleteWorkspaceItem(path: string, workspaceId?: string): Promise<{ deleted: boolean; path: string }> {
+	return apiFetch<{ deleted: boolean; path: string }>("/api/workspace/delete", {
+		method: "POST",
+		body: JSON.stringify(withWorkspace({ path }, workspaceId)),
+	});
+}
+
+export async function moveWorkspaceItem(sourcePath: string, targetDir: string, workspaceId?: string): Promise<WorkspaceTreeNode> {
+	return apiFetch<WorkspaceTreeNode>("/api/workspace/move", {
+		method: "POST",
+		body: JSON.stringify(withWorkspace({ sourcePath, targetDir }, workspaceId)),
+	});
+}
+
+export async function saveWorkspaceFile(path: string, content: string, workspaceId?: string): Promise<{ path: string; saved: boolean; size: number; updatedAt: string }> {
+	return apiFetch("/api/workspace/file", {
+		method: "PUT",
+		body: JSON.stringify(withWorkspace({ path, content }, workspaceId)),
+	});
+}
+
+export async function uploadWorkspaceFiles(files: Array<{ path: string; dataBase64: string }>, workspaceId?: string): Promise<{ uploaded: WorkspaceTreeNode[] }> {
+	return apiFetch<{ uploaded: WorkspaceTreeNode[] }>("/api/workspace/upload", {
+		method: "POST",
+		body: JSON.stringify(withWorkspace({ files }, workspaceId)),
+	});
+}
+
+/**
+ * Upload a single file via XHR so the browser can report real byte-level
+ * upload progress (fetch has no upload progress events). Used by the composer
+ * attachment flow where each file renders its own progress ring.
+ */
+export function uploadWorkspaceFileWithProgress(
+	file: { path: string; dataBase64: string },
+	workspaceId: string | undefined,
+	onProgress?: (loaded: number, total: number) => void,
+): Promise<WorkspaceTreeNode> {
+	return new Promise((resolve, reject) => {
+		const xhr = new XMLHttpRequest();
+		xhr.open("POST", "/api/workspace/upload");
+		xhr.responseType = "json";
+		xhr.setRequestHeader("Content-Type", "application/json");
+		xhr.upload.addEventListener("progress", (event) => {
+			if (event.lengthComputable) onProgress?.(event.loaded, event.total);
+		});
+		xhr.addEventListener("load", () => {
+			const body = xhr.response as { uploaded?: WorkspaceTreeNode[]; error?: string } | null;
+			if (xhr.status >= 200 && xhr.status < 300 && body?.uploaded?.[0]) {
+				onProgress?.(1, 1);
+				resolve(body.uploaded[0]);
+			} else {
+				reject(new Error(body?.error ?? `Upload failed (${xhr.status})`));
+			}
+		});
+		xhr.addEventListener("error", () => reject(new Error("Upload failed: network error")));
+		xhr.addEventListener("abort", () => reject(new Error("Upload cancelled")));
+		xhr.send(JSON.stringify(withWorkspace({ files: [file] }, workspaceId)));
+	});
+}
+
+/** Install a skill package (.zip / .md) into the workspace's private `.skills` dir. */
+export async function uploadWorkspaceSkill(fileName: string, dataBase64: string, workspaceId?: string): Promise<WorkspaceTreeNode> {
+	return apiFetch<WorkspaceTreeNode>("/api/workspace/skills/upload", {
+		method: "POST",
+		body: JSON.stringify(withWorkspace({ fileName, dataBase64 }, workspaceId)),
+	});
+}
+
+/** Build the raw URL for a workspace file, optionally forcing a download. */
+export function workspaceFileUrl(path: string, workspaceId?: string, download = false): string {
+	const params = new URLSearchParams({ path: normalizeWorkspaceRelativePath(path) });
+	if (workspaceId) params.set("workspaceId", workspaceId);
+	if (download) params.set("download", "1");
+	return `/api/workspace/raw?${params.toString()}`;
+}
+
+/** Build the URL that zips and downloads a workspace folder (empty path → whole workspace). */
+export function workspaceFolderZipUrl(path: string, workspaceId?: string): string {
+	const params = new URLSearchParams();
+	if (path) params.set("path", path);
+	if (workspaceId) params.set("workspaceId", workspaceId);
+	const qs = params.toString();
+	return `/api/workspace/download-folder${qs ? `?${qs}` : ""}`;
+}
+
+/** Fetch a pptx rendered to per-slide SVG. */
+export async function getPptxPreview(path: string, workspaceId?: string): Promise<PptxPreviewResult> {
+	const params = new URLSearchParams({ path: normalizeWorkspaceRelativePath(path) });
+	if (workspaceId) params.set("workspaceId", workspaceId);
+	return apiFetch<PptxPreviewResult>(`/api/workspace/pptx-preview?${params.toString()}`);
+}
+
+/**
+ * Keep workspace paths canonical at the browser/API boundary. `./` and
+ * Windows separators are harmless input noise; a leading `/` is preserved so
+ * the server can reject an absolute path instead of silently rebasing it.
+ */
+export function normalizeWorkspaceRelativePath(path: string): string {
+	return path.trim().replaceAll("\\", "/").replace(/^(?:\.\/)+/, "");
+}
+
+// ---- HTML resource inlining for srcdoc previews ----
+// Relative URLs in srcdoc iframes resolve against the parent page, not the
+// file's workspace location. We inline CSS/JS so the preview is self-contained.
+
+const MAX_INLINE_BYTES = 512 * 1024;
+
+function isRelUrl(url: string): boolean {
+  const t = url.trim();
+  if (!t) return false;
+  if (/^[a-z][a-z\d+.-]*:/i.test(t)) return false;
+  if (t.startsWith("//") || t.startsWith("/") || t.startsWith("?") || t.startsWith("#")) return false;
+  return true;
+}
+
+function splitResourceRef(ref: string): { path: string; hash: string } {
+  const trimmed = ref.trim();
+  const hashIndex = trimmed.indexOf("#");
+  const hash = hashIndex >= 0 ? trimmed.slice(hashIndex) : "";
+  const withoutHash = hashIndex >= 0 ? trimmed.slice(0, hashIndex) : trimmed;
+  const queryIndex = withoutHash.indexOf("?");
+  const path = queryIndex >= 0 ? withoutHash.slice(0, queryIndex) : withoutHash;
+  return { path, hash };
+}
+
+function resolveRelPath(htmlFilePath: string, relativeRef: string): string {
+  const normalizedFilePath = htmlFilePath.replaceAll("\\", "/");
+  const normalizedRef = relativeRef.replaceAll("\\", "/");
+  const htmlDir = normalizedFilePath.includes("/") ? normalizedFilePath.split("/").slice(0, -1).join("/") : "";
+  const segs = htmlDir ? htmlDir.split("/").filter(Boolean) : [];
+  for (const seg of normalizedRef.split("/")) {
+    if (seg === "." || seg === "") continue;
+    if (seg === "..") { segs.pop(); continue; }
+    segs.push(seg);
+  }
+  return segs.join("/");
+}
+
+function rewriteCssUrls(css: string, cssFilePath: string, wsId?: string): string {
+  // Known limitation: the [^"')]+ body cannot match a quoted URL containing
+  // ")" — those are left untouched (relative, likely broken in preview).
+  return css.replace(/url\(\s*(["']?)([^"')]+)\1\s*\)/gi, (match, quote: string, ref: string) => {
+    const trimmedRef = ref.trim();
+    if (!isRelUrl(trimmedRef)) return match;
+    const { path, hash } = splitResourceRef(trimmedRef);
+    if (!path) return match;
+    const rawUrl = workspaceFileUrl(resolveRelPath(cssFilePath, path), wsId) + hash;
+    const wrapper = quote || '"';
+    return `url(${wrapper}${rawUrl}${wrapper})`;
+  });
+}
+
+export async function inlineWorkspaceHtml(html: string, filePath: string, wsId?: string): Promise<string> {
+  const fetches: Array<{ tag: string; path: string; type: "css" | "js"; attrs?: string }> = [];
+
+  // Collect <link rel="stylesheet" href="...">
+  const linkRe = /<link\b([^>]*)\/?>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = linkRe.exec(html)) !== null) {
+    const attrs = m[1];
+    if (!/\brel\s*=\s*["'][^"']*stylesheet[^"']*["']/i.test(attrs)) continue;
+    const hm = attrs.match(/\bhref\s*=\s*["\']([^"\']+)["\']/i);
+    if (!hm) continue;
+    if (!isRelUrl(hm[1])) continue;
+    const { path } = splitResourceRef(hm[1]);
+    if (!path) continue;
+    const rp = resolveRelPath(filePath, path);
+    // Stylesheets only: a .js href inlined into a <style> block would be
+    // broken CSS anyway. Scripts are handled by the <script> pass below.
+    if (/\.css$/i.test(rp)) fetches.push({ tag: m[0], path: rp, type: "css" });
+  }
+
+  // Collect <script src="...">...</script>
+  const scrRe = /<script\b([^>]*)\bsrc\s*=\s*["']([^"']+)["']([^>]*)>\s*<\/script>/gi;
+  while ((m = scrRe.exec(html)) !== null) {
+    if (!isRelUrl(m[2])) continue;
+    const { path } = splitResourceRef(m[2]);
+    if (!path) continue;
+    const rp = resolveRelPath(filePath, path);
+    if (/\.(?:js|mjs)$/i.test(rp)) fetches.push({ tag: m[0], path: rp, type: "js", attrs: (m[1] + ' ' + m[3]).replace(/\bsrc\s*=\s*["'][^"']*["']/gi, '').replace(/\s+/g, ' ').trim() });
+  }
+
+  if (fetches.length === 0) return html;
+
+  // Fetch all in parallel
+  const results = await Promise.all(
+    fetches.map(async (f) => {
+      try {
+        const file = await getWorkspaceFile(f.path, wsId);
+        if (file?.content && file.content.length > 0 && file.content.length <= MAX_INLINE_BYTES) {
+          return { ...f, content: file.content };
+        }
+      } catch { /* skip */ }
+      return { ...f, content: null };
+    })
+  );
+
+  // Replace tags
+  let result = html;
+  for (const r of results) {
+    if (r.content == null) continue;
+    if (r.type === "css") {
+      const css = rewriteCssUrls(r.content, r.path, wsId);
+      result = result.replace(r.tag, () => `<style>${css}</style>`);
+    } else {
+      const attrs = r.attrs;
+      const open = attrs ? `<script ${attrs}>` : "<script>";
+      result = result.replace(r.tag, () => `${open}${r.content}</script>`);
+    }
+  }
+  return result;
+}
+
+/** Trigger a browser download by clicking a transient anchor. */
+export function triggerDownload(url: string): void {
+	const a = document.createElement("a");
+	a.href = url;
+	a.rel = "noopener";
+	// download attr is advisory; the server sets Content-Disposition with the real name.
+	a.download = "";
+	document.body.appendChild(a);
+	a.click();
+	a.remove();
+}
