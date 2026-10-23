@@ -104,7 +104,7 @@ export function Scoreler() {
   useEffect(()=>{void refresh(); const id=setInterval(()=>void refresh(),5000);return()=>clearInterval(id);},[refresh]);
   useEffect(()=>{localStorage.setItem('scoreler.locale',locale);document.documentElement.lang=locale;},[locale]);
   useEffect(()=>{document.documentElement.dataset.palette=palette;},[palette]);
-  useEffect(()=>{const root=document.documentElement,variables:Record<string,string>=selectedTheme?themeVariables(selectedTheme):{};for(const [key,value] of Object.entries(variables))root.style.setProperty(key,value);if(selectedTheme?.image)root.style.setProperty('--custom-background','url("'+selectedTheme.image+'")');
+  useEffect(()=>{const root=document.documentElement,variables:Record<string,string>=selectedTheme?themeVariables(selectedTheme):{'--on-accent':dark?'#101010':'#ffffff'};for(const [key,value] of Object.entries(variables))root.style.setProperty(key,value);if(selectedTheme?.image)root.style.setProperty('--custom-background','url("'+selectedTheme.image+'")');
    let cancelled=false;const timer=setTimeout(()=>{if(!cancelled&&customAppearance.loaded)void syncDesktopAppearance({palette,theme:dark?'dark':'light',locale,variables,...(selectedTheme?.image?{image:selectedTheme.image}:{})}).catch(()=>{});},100);
    return()=>{cancelled=true;clearTimeout(timer);for(const key of Object.keys(variables))root.style.removeProperty(key);root.style.removeProperty('--custom-background');};
   },[selectedTheme,palette,dark,locale,customAppearance.loaded]);

@@ -211,6 +211,14 @@ The installed updater downloads public GitHub source without sign-in. Private re
 
 ## Update log
 
+### 1.1.1
+
+- Fix reopening source updates through a Windows shortcut that omits the application folder. Install a runtime bootstrap and a separate executable with Scoreler's Windows identity and mascot icon; older updaters are repaired when the candidate first starts.
+- Keep the same profile and automatic activation backup. A shortcut to an older runtime resolves the currently selected update.
+- Use blurred, translucent sidebar and widget materials, with solid controls and a readable modal surface. Respect reduced-transparency and increased-contrast preferences.
+- Fix the recent-chat delete dialog's low-contrast label and oversized buttons. Validate custom accent labels and glass text against bright and dark background extremes.
+- Prevent isolated smoke tests from registering their temporary executable as a desktop notification shortcut.
+
 ### 1.1.0
 
 - Save custom background pictures, RGB colors and accent colors locally while retaining the four default themes.

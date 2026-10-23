@@ -1,4 +1,6 @@
 import appearanceHelper from './appearance.cjs';
+import runtimeBootstrap from '../scripts/runtime-bootstrap.cjs';
+import windowsShortcut from './windows-shortcut.cjs';
 import timerNotifications from './timer-notifications.cjs';
 import updateDependencies from '../scripts/update-dependencies.cjs';
 import updateState from './update-state.cjs';
@@ -20,7 +22,7 @@ import { fileURLToPath } from "node:url";
 
 if (process.env.SCORELER_SMOKE_DIR) {
   app.disableHardwareAcceleration();
-  const profile=join(process.env.SCORELER_HOME,"electron-profile"); mkdirSync(profile,{recursive:true}); app.setPath("userData",profile);
+  const profile=process.argv.find(arg=>arg.startsWith('--scoreler-profile='))?.slice('--scoreler-profile='.length)||join(process.env.SCORELER_HOME,"electron-profile"); mkdirSync(profile,{recursive:true}); app.setPath("userData",profile);
 }
 const explicitProfile=process.argv.find(arg=>arg.startsWith('--scoreler-profile='))?.slice('--scoreler-profile='.length);
 if(!process.env.SCORELER_SMOKE_DIR)app.setPath('userData',explicitProfile||join(app.getPath('appData'),'scoreler-desktop'));
@@ -42,6 +44,21 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 let scorelerIcon = join(__dirname,process.platform==='win32'?"scoreler.ico":"scoreler.png");
 app.setName("Scoreler");
 app.setAppUserModelId("com.scoreler.desktop");
+
+// Older source updaters launch electron.exe directly. Repair at the candidate's
+// first launch as well, so upgrading from those releases needs no manual patch.
+const profileUpdates=join(app.getPath('userData'),'updates')+'\\';
+if(process.platform==='win32'&&app.getAppPath().toLowerCase().startsWith(profileUpdates.toLowerCase())){
+ runtimeBootstrap.installRuntimeBootstrap(app.getAppPath(),app.getPath('userData'));
+ const branded=join(app.getAppPath(),'node_modules/electron/dist/Scoreler.exe');
+ if(basename(process.execPath).toLowerCase()==='electron.exe'&&existsSync(branded)){
+  app.releaseSingleInstanceLock();const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;
+  const child=spawn(branded,['--scoreler-profile='+app.getPath('userData')],{cwd:app.getAppPath(),env,detached:true,stdio:'ignore',windowsHide:true});
+  child.once('error',()=>{dialog.showErrorBox('Scoreler','Could not start the Scoreler runtime. Your study profile is unchanged.');app.exit(1);});
+  child.once('spawn',()=>{child.unref();app.exit(0);});
+  await new Promise(()=>{});
+ }
+}
 
 // ── 路径 ─────────────────────────────────────────────────────────────────────
 const isDev = !app.isPackaged;
@@ -84,7 +101,7 @@ function startDesktopUpdate(target,mode){
  writeFileSync(join(dir,'github-updates.cjs'),readFileSync(join(app.getAppPath(),'electron','github-updates.cjs')));
  const helper=join(dir,'desktop-updater.cjs');writeFileSync(helper,readFileSync(join(app.getAppPath(),'scripts','desktop-updater.cjs')));
  writeFileSync(join(dir,'status.json'),JSON.stringify({state:mode==='activate'?'restarting':'downloading',target,time:new Date().toISOString()}));
- const child=spawn(process.execPath,[helper,app.getPath('userData'),target,String(process.pid),mode,process.execPath,app.isPackaged?'':app.getAppPath()],{env:{...process.env,ELECTRON_RUN_AS_NODE:'1',SCORELER_ELECTRON_DIST:process.env.SCORELER_ELECTRON_DIST||(!app.isPackaged?dirname(process.execPath):'')},windowsHide:true,detached:true,stdio:'ignore'});writeFileSync(join(dir,'worker.json'),JSON.stringify({pid:child.pid}));child.once('error',()=>{writeFileSync(join(dir,'status.json'),JSON.stringify({state:'failed',target,detail:'Could not start the background updater.',time:new Date().toISOString()}));try{unlinkSync(join(dir,'worker.json'));}catch{}});child.unref();return {started:true,phase:mode==='activate'?'restarting':'preparing'};
+ const child=spawn(process.execPath,[helper,app.getPath('userData'),target,String(process.pid),mode,process.execPath,app.getAppPath().endsWith('.asar')?'':app.getAppPath()],{env:{...process.env,ELECTRON_RUN_AS_NODE:'1',SCORELER_ELECTRON_DIST:process.env.SCORELER_ELECTRON_DIST||(!app.isPackaged?dirname(process.execPath):'')},windowsHide:true,detached:true,stdio:'ignore'});writeFileSync(join(dir,'worker.json'),JSON.stringify({pid:child.pid}));child.once('error',()=>{writeFileSync(join(dir,'status.json'),JSON.stringify({state:'failed',target,detail:'Could not start the background updater.',time:new Date().toISOString()}));try{unlinkSync(join(dir,'worker.json'));}catch{}});child.unref();return {started:true,phase:mode==='activate'?'restarting':'preparing'};
 }
 async function prepareAutomaticUpdate(){if(!updatePreferences().automatic||process.env.SCORELER_SMOKE_DIR)return;try{const target=await githubUpdates.latest();const pending=updateState.read(join(app.getPath('userData'),'updates','pending.json'));const origin=updateState.read(join(app.getAppPath(),'update-origin.json'));const current=origin?.commit||JSON.parse(readFileSync(join(app.getAppPath(),'package.json'),'utf8')).scorelerSourceCommit||execFileSync('git',['rev-parse','HEAD'],{cwd:app.getAppPath(),encoding:'utf8',windowsHide:true}).trim();if(target!==current&&pending?.commit!==target)startDesktopUpdate(target,'prepare');}catch{}}
 ipcMain.handle('scoreler-update-preferences',(event,patch)=>{validateUpdateSender(event);if(patch!==undefined){if(typeof patch?.automatic!=='boolean'||Object.keys(patch).some(k=>k!=='automatic'))throw Error('Invalid update preference');const dir=join(app.getPath('userData'),'updates');mkdirSync(dir,{recursive:true});writeFileSync(join(dir,'preferences.json'),JSON.stringify({automatic:patch.automatic}));if(patch.automatic)void prepareAutomaticUpdate();}return {...updatePreferences(),...updateStatus()};});
@@ -104,7 +121,10 @@ ipcMain.on('scoreler-loading-appearance',event=>{event.returnValue=event.sender=
 ipcMain.handle('scoreler-appearance-set',(event,value)=>{validateUpdateSender(event);let png;if(value?.icon!==undefined){if(typeof value.icon!=='string'||value.icon.length>400000||!/^data:image\/png;base64,[a-z0-9+/=]+$/i.test(value.icon))throw Error('Invalid app icon');const image=nativeImage.createFromDataURL(value.icon);if(image.isEmpty()||image.getSize().width!==256||image.getSize().height!==256)throw Error('Invalid app icon size');png=image.toPNG();}
  appearanceStore.save(value,png);if(png){scorelerIcon=appearanceStore.icon;mainWindow?.setIcon(scorelerIcon);tray?.setImage(nativeImage.createFromPath(appearanceStore.png).resize({width:20,height:20}));if(process.platform==='win32'&&mainWindow){const installed=join(process.env.LOCALAPPDATA||app.getPath('home'),'Programs','Scoreler','Scoreler.exe');mainWindow.setAppDetails({appId:'com.scoreler.desktop',appIconPath:scorelerIcon,appIconIndex:0,relaunchDisplayName:'Scoreler',relaunchCommand:existsSync(installed)?'"'+installed+'"':'"'+process.execPath+'" "'+app.getAppPath()+'" --scoreler-profile="'+app.getPath('userData')+'"'});if(app.getPath('userData')===join(app.getPath('appData'),'scoreler-desktop'))try{const shortcut=join(app.getPath('appData'),'Microsoft','Windows','Start Menu','Programs','Scoreler.lnk'),details=shell.readShortcutLink(shortcut);if(details.target.toLowerCase()===installed.toLowerCase())shell.writeShortcutLink(shortcut,'update',{icon:scorelerIcon,iconIndex:0});}catch{}}}return {saved:true};});
 
-const countdownNotifications=timerNotifications.createTimerNotifications({Notification,icon:scorelerIcon,showMainWindow:()=>showMainWindow(),onExpired:value=>{if(mainWindow&&!mainWindow.isDestroyed())mainWindow.webContents.send('scoreler-timer-expired',value);}});
+// Native Windows toast support can register a Start-menu shortcut as a side
+// effect. Isolated smoke tests must not register their temporary executable.
+const timerNotificationAPI=process.env.SCORELER_SMOKE_DIR||process.env.SCORELER_TEST_NO_SHELL_REGISTRATION?{isSupported:()=>false}:Notification;
+const countdownNotifications=timerNotifications.createTimerNotifications({Notification:timerNotificationAPI,icon:scorelerIcon,showMainWindow:()=>showMainWindow(),onExpired:value=>{if(mainWindow&&!mainWindow.isDestroyed())mainWindow.webContents.send('scoreler-timer-expired',value);}});
 ipcMain.handle('scoreler-timer-sync',(event,value)=>{validateUpdateSender(event);return countdownNotifications.sync(value);});
 let isCloseDialogOpen = false;
 let closeDialogCopy = {
@@ -150,7 +170,7 @@ ipcMain.handle("scoreler-save-study-export",async(event,paper)=>{
  const selected=await dialog.showSaveDialog(mainWindow,{title:'Export / 导出',defaultPath:paper.title.replace(/[<>:"/\\|?*\x00-\x1f]/g,'_').slice(0,100)+'.'+paper.format,filters:[{name:paper.format.toUpperCase(),extensions:[paper.format]}]});if(selected.canceled||!selected.filePath)return false;
  if(paper.format==='docx'){if(typeof paper.data!=='string'||paper.data.length>30000000)throw new Error('Invalid Word document');const data=Buffer.from(paper.data,'base64');if(data[0]!==80||data[1]!==75)throw new Error('Invalid Word document');writeFileSync(selected.filePath,data);return true;}
  const temporary=join(app.getPath('temp'),'scoreler-export-'+randomBytes(12).toString('hex')+'.html');const output=new BrowserWindow({show:false,width:794,height:1123,webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true,backgroundThrottling:false}});
- try{const security=`<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; font-src http://127.0.0.1:${serverPort} data:; img-src data: http://127.0.0.1:${serverPort}; script-src 'none'">`;writeFileSync(temporary,paper.html.replace('<head>','<head>'+security));await output.loadFile(temporary);await output.webContents.executeJavaScript('Promise.all([document.fonts.ready,...Array.from(document.images).map(image=>image.decode())])');if(paper.format==='pdf'){writeFileSync(selected.filePath,await output.webContents.printToPDF({printBackground:true,preferCSSPageSize:true}));}else{await output.webContents.insertCSS('html,body{margin:0!important}body{padding:36px!important;box-sizing:border-box!important;width:794px!important}');const height=await output.webContents.executeJavaScript('Math.ceil(document.body.scrollHeight)');if(height>30000)throw new Error('This image is too tall. Export PDF or Word instead.');output.setContentSize(794,Math.max(100,height));await output.webContents.executeJavaScript('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');writeFileSync(selected.filePath,(await output.webContents.capturePage({x:0,y:0,width:794,height:Math.max(100,height)})).toPNG());}return true;}finally{output.destroy();try{unlinkSync(temporary);}catch{}}
+ try{const security=`<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; font-src http://127.0.0.1:${serverPort} data:; img-src data: http://127.0.0.1:${serverPort}; script-src 'none'">`;writeFileSync(temporary,paper.html.replace('<head>','<head>'+security));await output.loadFile(temporary);await output.webContents.executeJavaScript('Promise.all([document.fonts.ready,...Array.from(document.images).map(image=>image.decode())])');if(paper.format==='pdf'){writeFileSync(selected.filePath,await output.webContents.printToPDF({printBackground:true,preferCSSPageSize:true}));}else{await output.webContents.insertCSS('html,body{margin:0!important}body{padding:36px!important;box-sizing:border-box!important;width:794px!important}');const height=await output.webContents.executeJavaScript('Math.ceil(document.body.scrollHeight)');if(height>30000)throw new Error('This image is too tall. Export PDF or Word instead.');output.setContentSize(794,Math.max(100,height));await output.webContents.executeJavaScript('new Promise(resolve=>setTimeout(resolve,100))');writeFileSync(selected.filePath,(await output.webContents.capturePage({x:0,y:0,width:794,height:Math.max(100,height)})).toPNG());}return true;}finally{output.destroy();try{unlinkSync(temporary);}catch{}}
 });
 ipcMain.handle("scoreler-save-practice-pdf", async (event,paper) => {
   if(!mainWindow||event.sender!==mainWindow.webContents||!event.sender.getURL().startsWith(`http://127.0.0.1:${serverPort}/`))throw new Error("Unauthorized PDF request");
@@ -277,6 +297,7 @@ ipcMain.handle("inno-window-width-capacity", (event, side) => {
 // ── Loading 窗口（服务启动期间显示） ────────────────────────────────────────
 function openLoadingWindow() {
   loadingWindow = new BrowserWindow({
+    show:!process.env.SCORELER_SMOKE_DIR,
     icon: scorelerIcon,
     title: "Scoreler",
     width: 400,
@@ -286,7 +307,7 @@ function openLoadingWindow() {
     backgroundColor: appearanceHelper.background(appearanceStore.read()),
     webPreferences: { contextIsolation: true, nodeIntegration: false, preload:join(__dirname,"loading-preload.cjs") },
   });
-  if(process.env.SCORELER_SMOKE_DIR){const output=process.env.SCORELER_SMOKE_DIR;mkdirSync(output,{recursive:true});loadingWindow.webContents.once('did-finish-load',async()=>{try{await loadingWindow.webContents.executeJavaScript("new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))");if(loadingWindow&&!loadingWindow.isDestroyed())writeFileSync(join(output,'scoreler-loading.png'),(await loadingWindow.webContents.capturePage()).toPNG());}catch{}});}
+  if(process.env.SCORELER_SMOKE_DIR){const output=process.env.SCORELER_SMOKE_DIR;mkdirSync(output,{recursive:true});loadingWindow.webContents.once('did-finish-load',async()=>{try{await loadingWindow.webContents.executeJavaScript("new Promise(resolve=>setTimeout(resolve,100))");if(loadingWindow&&!loadingWindow.isDestroyed())writeFileSync(join(output,'scoreler-loading.png'),(await loadingWindow.webContents.capturePage()).toPNG());}catch{}});}
   loadingWindow.loadFile(join(__dirname, "loading.html"));
   loadingWindow.on("closed", () => { loadingWindow = null; });
 }
@@ -409,6 +430,7 @@ function openMainWindow() {
   if (mainWindow) { mainWindow.focus(); return; }
 
   mainWindow = new BrowserWindow({
+    show:!process.env.SCORELER_SMOKE_DIR,
     width: 1200,
     height: 800,
     minWidth: 800,
@@ -425,6 +447,7 @@ function openMainWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       preload: join(__dirname, "preload.cjs"),
+      backgroundThrottling:!process.env.SCORELER_SMOKE_DIR,
       zoomFactor: 1,
     },
   });
@@ -451,7 +474,7 @@ function openMainWindow() {
           if(browser.error||!browser.url||browser.loading)throw Error('Browser navigation check failed: '+JSON.stringify(browser));
         }
         writeFileSync(join(output,"desktop-state.json"),JSON.stringify({ok:true,...state,menuRemoved:Menu.getApplicationMenu()===null,iconPresent:!nativeImage.createFromPath(scorelerIcon).isEmpty(),subjects:health.subjects?.length??0,configuredModel:settings.defaultModel,contextIsolation:mainWindow.webContents.getLastWebPreferences().contextIsolation,nodeIntegration:mainWindow.webContents.getLastWebPreferences().nodeIntegration,electron:process.versions.electron,node:process.versions.node},null,2));
-        await mainWindow.webContents.executeJavaScript("new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))");
+        await mainWindow.webContents.executeJavaScript("new Promise(resolve=>setTimeout(resolve,100))");
         const shot=await mainWindow.webContents.capturePage();
         writeFileSync(join(output,"scoreler-desktop.png"),shot.toPNG());
         writeFileSync(join(output,"desktop-result.json"),JSON.stringify({ok:true,...state,...services,menuRemoved:Menu.getApplicationMenu()===null,iconPresent:!nativeImage.createFromPath(scorelerIcon).isEmpty(),subjects:health.subjects?.length??0,configuredModel:settings.defaultModel,contextIsolation:mainWindow.webContents.getLastWebPreferences().contextIsolation,nodeIntegration:mainWindow.webContents.getLastWebPreferences().nodeIntegration,electron:process.versions.electron,node:process.versions.node},null,2));
@@ -530,6 +553,7 @@ function openMainWindow() {
 }
 
 function showMainWindow() {
+  if(process.env.SCORELER_SMOKE_DIR){mainWindow?.hide();return;}
   if (!mainWindow) {
     openMainWindow();
     return;
@@ -644,6 +668,9 @@ async function startConfiguredOllama() {
 }
 // ── 应用生命周期 ──────────────────────────────────────────────────────────────
 app.whenReady().then(async () => {
+  if(process.platform==='win32'&&!process.env.SCORELER_SMOKE_DIR&&!process.env.SCORELER_TEST_NO_SHELL_REGISTRATION&&app.getPath('userData')===join(app.getPath('appData'),'scoreler-desktop')){
+    try{windowsShortcut.repairWindowsShortcut({shell,appData:app.getPath('appData'),profile:app.getPath('userData'),executable:process.execPath,installed:join(process.env.LOCALAPPDATA||app.getPath('home'),'Programs','Scoreler','Scoreler.exe'),root:app.getAppPath(),icon:scorelerIcon});}catch{}
+  }
   if(!hasInstanceLock)return;
   tray = new Tray(nativeImage.createFromPath(scorelerIcon).resize({width:20,height:20}));
   tray.setToolTip("Scoreler");

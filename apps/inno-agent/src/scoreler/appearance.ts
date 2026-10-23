@@ -9,4 +9,13 @@ export function appearanceState(value:unknown):AppearanceState {
 function channels(hex:string){return [1,3,5].map(i=>parseInt(hex.slice(i,i+2),16));}
 function mix(a:string,b:string,r:number){const c=channels(a),d=channels(b);return '#'+c.map((v,i)=>Math.round(v*(1-r)+d[i]*r).toString(16).padStart(2,'0')).join('');}
 function bright(hex:string){return channels(hex).map(v=>{const s=v/255;return s<=.04045?s/12.92:((s+.055)/1.055)**2.4;}).reduce((a,v,i)=>a+v*[.2126,.7152,.0722][i],0);}
-export function themeVariables(t:CustomTheme){const dark=bright(t.background)<.22,ink=dark?'#f5f5f5':'#202020',surface=mix(t.background,dark?'#ffffff':'#ffffff',dark?.07:.8);return {'--bg':t.background,'--surface':surface,'--sidebar':surface+'f2','--text':ink,'--muted':mix(t.background,ink,.72),'--line':mix(t.background,ink,.2),'--accent':t.accent,'--accent-light':mix(surface,t.accent,.18),'--hover':mix(surface,t.accent,.1),'--control':mix(surface,t.accent,.07),'--on-accent':bright(t.accent)>.35?'#101010':'#ffffff','--pet-outline':mix(t.accent,'#111111',.5),'--pet-body':mix(t.accent,'#ffffff',.55),'--pet-shine':mix(t.accent,'#ffffff',.82),'--pet-eyes':mix(t.accent,'#111111',.65),'--pet-cheek':'#eab8a7'};}
+function contrast(a:string,b:string){const x=bright(a),y=bright(b);return (Math.max(x,y)+.05)/(Math.min(x,y)+.05);}
+export function themeVariables(t:CustomTheme){
+ const dark=bright(t.background)<.22,ink=dark?'#f5f5f5':'#202020';
+ // An arbitrary photo cannot be sampled reliably everywhere. Anchor the glass
+ // tint near black/white, then let a controlled amount of the photo through.
+ const surface=mix(t.background,dark?'#101820':'#ffffff',dark?.9:.96);
+ let readableAccent=t.accent;
+ for(let step=1;contrast(readableAccent,surface)<7&&step<=20;step++)readableAccent=mix(t.accent,ink,step/20);
+ return {'--bg':t.background,'--surface':surface,'--sidebar':surface+'e6','--text':ink,'--muted':dark?'#d5dce5':'#414b59','--line':mix(surface,ink,.28),'--accent':t.accent,'--accent-ink':readableAccent,'--accent-light':mix(surface,t.accent,.18),'--hover':mix(surface,t.accent,.1),'--control':mix(surface,t.accent,.04),'--on-accent':contrast(t.accent,'#000000')>=contrast(t.accent,'#ffffff')?'#000000':'#ffffff','--pet-outline':mix(t.accent,'#111111',.5),'--pet-body':mix(t.accent,'#ffffff',.55),'--pet-shine':mix(t.accent,'#ffffff',.82),'--pet-eyes':mix(t.accent,'#111111',.65),'--pet-cheek':'#eab8a7'};
+}

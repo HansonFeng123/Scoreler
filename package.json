@@ -1,6 +1,6 @@
 {
   "name": "scoreler-desktop",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "private": true,
   "description": "Scoreler is a personal AI agent focused on studying.",
   "author": "Inno Agent Contributors",
@@ -55,7 +55,9 @@
       "scripts/source-updater.cjs",
       "scripts/desktop-updater.cjs",
       "source-update.json",
-      "scripts/update-dependencies.cjs"
+      "scripts/update-dependencies.cjs",
+      "scripts/runtime-bootstrap.cjs",
+      "scripts/brand-runtime.ps1"
     ],
     "asarUnpack": [
       "**/node_modules/node-pty/**/*",
