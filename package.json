@@ -9,7 +9,7 @@
     "apps/inno-agent",
     "apps/inno-agent/web"
   ],
-  "main": "electron/main.js",
+  "main": "electron/entry.cjs",
   "scripts": {
     "build": "npm --workspace inno-agent run build && node scripts/scoreler-video-build.mjs && npm --workspace inno-agent-web run build",
     "start": "node scripts/scoreler-dev.mjs",
