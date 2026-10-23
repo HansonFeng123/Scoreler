@@ -663,7 +663,7 @@ export async function handleSessionsRoutes(
 		return true;
 	}
 
-	const deleteSessionMatch = matchRoute("DELETE", method, url, "/api/sessions/:id");
+	const deleteSessionMatch = matchRoute("DELETE", method, url.split("?")[0], "/api/sessions/:id");
 	if (deleteSessionMatch) {
 		const id = decodeURIComponent(deleteSessionMatch.id);
 		if (streamRegistry.getActiveForSession(id)) {
@@ -688,7 +688,8 @@ export async function handleSessionsRoutes(
 		// If this session is the sole owner of a temp workspace, remove the
 		// workspace folder + registry entry as well.
 		const boundWorkspaceId = workspaceRegistry.getSessionWorkspaceId(sessionId);
-		const shouldDropTempWorkspace = workspaceRegistry.isOnlyTempSessionOwner(sessionId, boundWorkspaceId);
+		const preserveWorkspace = new URL(url,"http://localhost").searchParams.get("preserveWorkspace") === "true";
+		const shouldDropTempWorkspace = !preserveWorkspace && workspaceRegistry.isOnlyTempSessionOwner(sessionId, boundWorkspaceId);
 
 		rmSync(sessionPath, { force: true });
 		// Clean sidecar metadata.

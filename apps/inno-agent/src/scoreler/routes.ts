@@ -1,3 +1,4 @@
+import {appearanceState} from './appearance.js';
 import {randomUUID} from 'node:crypto';
 import {featureLayout} from './feature-layout.js';
 import {generateDictation,gradeDictation,dictationCompletion,type DictationSheet} from './dictation.js';
@@ -22,7 +23,9 @@ export async function handleStudentRoutes(req: IncomingMessage, res: ServerRespo
   const pathname = url.split('?')[0];
   const body = async () => await readBody(req, { maxBytes: 30 * 1024 * 1024 }) as Record<string, unknown>;
   try {
-    if(pathname==='/api/student/feature-layout'&&method==='GET'){json(res,200,featureLayout(store.get('meta','feature-layout')));
+    if(pathname==='/api/student/appearance'&&method==='GET'){json(res,200,store.get('meta','appearance')||{selected:null,themes:[]});
+    }else if(pathname==='/api/student/appearance'&&method==='PUT'){const value=appearanceState(await body());store.put('meta',{id:'appearance',...value});json(res,200,value);
+    }else if(pathname==='/api/student/feature-layout'&&method==='GET'){json(res,200,featureLayout(store.get('meta','feature-layout')));
     }else if(pathname==='/api/student/feature-layout'&&method==='PUT'){const layout=featureLayout(await body());store.put('meta',{id:'feature-layout',...layout});json(res,200,layout);
     }else if(pathname==='/api/student/dictations'&&method==='GET'){json(res,200,store.list<DictationSheet>('dictations').reverse());
     }else if(/^\/api\/student\/dictations\/[a-f0-9-]+\/draft$/.test(pathname)&&method==='PUT'){const id=pathname.split('/')[4],sheet=store.get<DictationSheet>('dictations',id),b=await body();if(!sheet||!Array.isArray(b.answers)||b.answers.length!==sheet.items.length||b.answers.some(a=>typeof a!=='string'||a.length>4000))throw new StudentError('Invalid draft');store.put('dictations',{...sheet,draftAnswers:b.answers});json(res,200,{saved:true});

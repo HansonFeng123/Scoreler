@@ -52,6 +52,9 @@ contextBridge.exposeInMainWorld("innoDesktop", {
 });
 
 contextBridge.exposeInMainWorld("scorelerDesktop", {
+ syncAppearance:value=>ipcRenderer.invoke('scoreler-appearance-set',value),
+ syncTimer:value=>ipcRenderer.invoke('scoreler-timer-sync',value),
+ onTimerExpired:fn=>{const listener=(_event,value)=>fn(value);ipcRenderer.on('scoreler-timer-expired',listener);return()=>ipcRenderer.removeListener('scoreler-timer-expired',listener);},
  updatePreferences:patch=>ipcRenderer.invoke('scoreler-update-preferences',patch),
  getAppInfo:()=>ipcRenderer.invoke('scoreler-app-info'),
  checkSourceUpdates:()=>ipcRenderer.invoke('scoreler-source-update-check'),

@@ -1,3 +1,5 @@
+import appearanceHelper from './appearance.cjs';
+import timerNotifications from './timer-notifications.cjs';
 import updateDependencies from '../scripts/update-dependencies.cjs';
 import updateState from './update-state.cjs';
 // A detached launcher may close its output pipe while the app is running.
@@ -8,7 +10,7 @@ import {setupMail} from './mail-integration.js';
 import {setupStudyBrowser} from './study-browser.js';
 import { randomBytes } from 'node:crypto';
 import {createCompanion} from './companion.js';
-import { app, BrowserWindow, Tray, Menu, shell, dialog, clipboard, nativeImage, ipcMain, screen } from "electron";
+import { app, BrowserWindow, Tray, Menu, shell, dialog, clipboard, nativeImage, ipcMain, screen, Notification } from "electron";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { spawn, execFile, execFileSync } from "node:child_process";
 import { createServer as createNetServer } from "node:net";
@@ -37,7 +39,7 @@ app.on('second-instance',()=>showMainWindow());
 app.commandLine.appendSwitch("use-mock-keychain");
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const scorelerIcon = join(__dirname,process.platform==='win32'?"scoreler.ico":"scoreler.png");
+let scorelerIcon = join(__dirname,process.platform==='win32'?"scoreler.ico":"scoreler.png");
 app.setName("Scoreler");
 app.setAppUserModelId("com.scoreler.desktop");
 
@@ -52,6 +54,8 @@ const explicitHome = process.argv.find(arg => arg.startsWith('--scoreler-home=')
 const innoHome = explicitHome || process.env.SCORELER_HOME || join(app.getPath("userData"), "study");
 const desktopToken = randomBytes(32).toString("hex");
 const serverInstance = randomBytes(16).toString("hex");
+const appearanceStore=appearanceHelper.createAppearanceStore(innoHome);
+if(existsSync(appearanceStore.icon))scorelerIcon=appearanceStore.icon;
 const configDir = join(innoHome, "config");
 const configPath = join(configDir, "config.json");
 
@@ -96,6 +100,12 @@ let tray = null;
 let isQuitting = false;
 const companion=createCompanion({home:innoHome,getMainWindow:()=>mainWindow,getPort:()=>serverPort,showMainWindow:()=>showMainWindow(),isQuitting:()=>isQuitting});
 let mailIntegration=null,studyBrowser=null;
+ipcMain.on('scoreler-loading-appearance',event=>{event.returnValue=event.sender===loadingWindow?.webContents?appearanceStore.snapshot():{};});
+ipcMain.handle('scoreler-appearance-set',(event,value)=>{validateUpdateSender(event);let png;if(value?.icon!==undefined){if(typeof value.icon!=='string'||value.icon.length>400000||!/^data:image\/png;base64,[a-z0-9+/=]+$/i.test(value.icon))throw Error('Invalid app icon');const image=nativeImage.createFromDataURL(value.icon);if(image.isEmpty()||image.getSize().width!==256||image.getSize().height!==256)throw Error('Invalid app icon size');png=image.toPNG();}
+ appearanceStore.save(value,png);if(png){scorelerIcon=appearanceStore.icon;mainWindow?.setIcon(scorelerIcon);tray?.setImage(nativeImage.createFromPath(appearanceStore.png).resize({width:20,height:20}));if(process.platform==='win32'&&mainWindow){const installed=join(process.env.LOCALAPPDATA||app.getPath('home'),'Programs','Scoreler','Scoreler.exe');mainWindow.setAppDetails({appId:'com.scoreler.desktop',appIconPath:scorelerIcon,appIconIndex:0,relaunchDisplayName:'Scoreler',relaunchCommand:existsSync(installed)?'"'+installed+'"':'"'+process.execPath+'" "'+app.getAppPath()+'" --scoreler-profile="'+app.getPath('userData')+'"'});if(app.getPath('userData')===join(app.getPath('appData'),'scoreler-desktop'))try{const shortcut=join(app.getPath('appData'),'Microsoft','Windows','Start Menu','Programs','Scoreler.lnk'),details=shell.readShortcutLink(shortcut);if(details.target.toLowerCase()===installed.toLowerCase())shell.writeShortcutLink(shortcut,'update',{icon:scorelerIcon,iconIndex:0});}catch{}}}return {saved:true};});
+
+const countdownNotifications=timerNotifications.createTimerNotifications({Notification,icon:scorelerIcon,showMainWindow:()=>showMainWindow(),onExpired:value=>{if(mainWindow&&!mainWindow.isDestroyed())mainWindow.webContents.send('scoreler-timer-expired',value);}});
+ipcMain.handle('scoreler-timer-sync',(event,value)=>{validateUpdateSender(event);return countdownNotifications.sync(value);});
 let isCloseDialogOpen = false;
 let closeDialogCopy = {
   title: "关闭 Scoreler",
@@ -273,8 +283,8 @@ function openLoadingWindow() {
     height: 280,
     resizable: false,
     frame: false,
-    backgroundColor: "#f2f5fc",
-    webPreferences: { contextIsolation: true, nodeIntegration: false },
+    backgroundColor: appearanceHelper.background(appearanceStore.read()),
+    webPreferences: { contextIsolation: true, nodeIntegration: false, preload:join(__dirname,"loading-preload.cjs") },
   });
   if(process.env.SCORELER_SMOKE_DIR){const output=process.env.SCORELER_SMOKE_DIR;mkdirSync(output,{recursive:true});loadingWindow.webContents.once('did-finish-load',async()=>{try{await loadingWindow.webContents.executeJavaScript("new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))");if(loadingWindow&&!loadingWindow.isDestroyed())writeFileSync(join(output,'scoreler-loading.png'),(await loadingWindow.webContents.capturePage()).toPNG());}catch{}});}
   loadingWindow.loadFile(join(__dirname, "loading.html"));
@@ -410,7 +420,7 @@ function openMainWindow() {
     // them so the app no longer gets the separate native title-bar strip.
     titleBarStyle: process.platform === "darwin" ? "hidden" : undefined,
     trafficLightPosition: process.platform === "darwin" ? { x: 16, y: 18 } : undefined,
-    backgroundColor: "#f2f5fc",
+    backgroundColor: appearanceHelper.background(appearanceStore.read()),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -672,6 +682,7 @@ app.on("before-quit", () => {
   isQuitting = true;
   mailIntegration?.dispose();
   studyBrowser?.dispose();
+  countdownNotifications.dispose();
   companion.dispose();
   serverProcess?.kill();
 });

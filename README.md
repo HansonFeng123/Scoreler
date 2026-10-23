@@ -1,5 +1,7 @@
 # Scoreler
 
+Scoreler is a personal AI agent focused on studying.
+
 English | [简体中文](README.zh-CN.md)
 
 Scoreler is a local-first desktop study companion for students. It combines planning, an AI study assistant, learning materials, and small study tools in one Windows application. The interface supports English and Simplified Chinese.
@@ -65,7 +67,9 @@ The screenshots below use an isolated demonstration profile.
 - **Email:** IMAP inbox, search, formatted message reading, clickable links, arrival notifications and AI-assisted summaries. Connection requires a compatible provider and client authorization credentials.
 - **Optional campus browser:** explicitly enabled embedded browser, user-configured website shortcuts, persistent sessions and encrypted saved sign-ins. It is disabled initially.
 - **Desktop companion:** a draggable pixel pet with daily tasks, completion buttons, reminders, image input, a chat entry point, opening the main window, and screen-edge auto-hide with hover reveal.
-- **Appearance:** light/dark modes, four coordinated color palettes, matching pet colors and expressions, and a collapsible sidebar. Drag functions to reorder them or move them between the sidebar and toolbox. Toolbox and Settings remain accessible; Reset layout restores defaults.
+- **Appearance:** light/dark modes, four default palettes, and saved custom themes with an RGB background color or local picture and a chosen accent color. The loading screen and running app icon follow your saved appearance. Windows may cache pinned shortcut icons. Drag functions to reorder them or move them between the sidebar and toolbox; a collapsed sidebar keeps its icons accessible.
+- **Conversation management:** right-click a recent conversation to delete it after confirmation. Saved study materials, notes and videos remain.
+- **Countdown reminders:** the desktop app schedules a system notification when the timer finishes, including while another page is open or the renderer is busy. Windows notification settings apply; the application must remain running.
 - **Dictation practice:** Create saved exercises from word-definition pairs in chat images, files or text. Open them from a chat shortcut or the toolbox, type answers, and submit for AI marking against the supplied meaning. Equivalent synonyms are accepted; incomplete definitions may be rejected. Draft answers are saved locally. Supports PDF/PNG/DOCX export. Exported sheets omit answers unless explicitly selected. Uses the configured default model; generated content and marking need review.
 - **Toolbox:** startup guide, countdown timer, stopwatch, choice wheel, random numbers and Markdown-to-PDF export. Clock state survives navigation; countdown completion produces an in-app reminder.
 - **Source updates:** check the configured source branch and explicitly apply a reviewed fast-forward update while the app is closed.
@@ -206,6 +210,16 @@ The calculator supports arithmetic precedence, parentheses, unary signs, percent
 The installed updater downloads public GitHub source without sign-in. Private repositories use Git Credential Manager for authentication locally; credentials are not saved in the source snapshot or passed as command-line arguments. Enable Automatically prepare updates in Settings to check at startup and every six hours, build new source in the background, and activate it at the next restart. Automatic preparation is off initially. Each update builds in its own version directory. Before activation on restart, Scoreler automatically backs up the existing local profile, then switches the ready marker. If the backup fails, it keeps the previous version. The ready marker changes only after a successful build, so a failed build leaves the previous ready version selected. The installed launcher opens that ready version on subsequent launches. Your study database and configuration remain outside those source directories. Node.js, npm and Git must already be installed; private-repository users need their own authorized GitHub access.
 
 ## Update log
+
+### 1.1.0
+
+- Save custom background pictures, RGB colors and accent colors locally while retaining the four default themes.
+- Match the loading screen and running app icon to the saved theme.
+- Deliver countdown completion through desktop system notifications.
+- Add confirmed deletion from the recent-conversation context menu without deleting saved study materials.
+- Fix the startup guide's AI Agent shortcut so it opens the study assistant.
+- Remove the build computer's working-directory value from generated video bundles.
+- ChatGPT account sign-in is not included in this release. A separate integration is planned using OpenAI's official Sign in with ChatGPT DevKit, subject to supported capabilities and verified authorization tests. Current AI setup continues to use user-configured providers.
 
 ### 1.0.0
 

@@ -5,10 +5,16 @@ let clock:Clock={...initial},alarm:ReturnType<typeof setTimeout>|undefined;
 const listeners=new Set<()=>void>();
 try{const saved=JSON.parse(localStorage.getItem(key)||'null');if(saved&&Object.keys(initial).every(k=>saved[k]===null||typeof saved[k]==='number'&&Number.isFinite(saved[k])&&saved[k]>=0))clock=saved;}catch{}
 function save(){localStorage.setItem(key,JSON.stringify(clock));listeners.forEach(fn=>fn());}
-function arm(){clearTimeout(alarm);if(clock.deadline!==null)alarm=setTimeout(()=>{
- if(clock.deadline===null)return;if(Date.now()<clock.deadline){arm();return;}
- clock={...clock,deadline:null,remaining:0};save();window.dispatchEvent(new Event('scoreler-timer-finished'));
-},Math.min(2147483647,Math.max(0,clock.deadline-Date.now())));}
+function finish(){clock={...clock,deadline:null,remaining:0};save();window.dispatchEvent(new Event('scoreler-timer-finished'));}
+function arm(){clearTimeout(alarm);const deadline=clock.deadline;
+ const desktop=window.scorelerDesktop;
+ if(desktop?.syncTimer)void desktop.syncTimer({deadline,locale:localStorage.getItem('scoreler.locale')==='en'?'en':'zh-CN'}).then(state=>{if(state.completed&&deadline!==null&&clock.deadline===deadline)finish();}).catch(()=>{});
+ if(deadline===null)return;
+ alarm=setTimeout(()=>{if(clock.deadline===null)return;if(Date.now()<clock.deadline){arm();return;}finish();
+  if(!desktop?.syncTimer&&typeof Notification!=='undefined'&&Notification.permission==='granted'){const en=localStorage.getItem('scoreler.locale')==='en';new Notification(en?'Scoreler · Time’s up':'Scoreler · 计时结束',{body:en?'Your focus session is complete. Take a little break.':'这段专注已完成，休息一下吧。'});}
+ },Math.min(2147483647,Math.max(0,deadline-Date.now())));
+}
+window.scorelerDesktop?.onTimerExpired?.(value=>{if(clock.deadline===value.deadline){clearTimeout(alarm);finish();}});
 arm();
 export const readClock=()=>clock;
 export const listenClock=(fn:()=>void)=>{listeners.add(fn);return()=>{listeners.delete(fn);};};
