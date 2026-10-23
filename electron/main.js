@@ -30,7 +30,7 @@ const hasInstanceLock=app.requestSingleInstanceLock();
 if(!hasInstanceLock)app.exit(0);
 try{updateState.activatePending(app.getPath('userData'));}catch{dialog.showErrorBox('Scoreler update','The automatic backup failed. The previous version remains selected.');}
 const ready=updateState.read(join(app.getPath('userData'),'updates','ready.json'));
-const managedRoot=updateState.validCandidate(app.getPath('userData'),ready);
+const managedRoot=updateState.selectedCandidate(app.getPath('userData'),ready,app.getAppPath());
 if(managedRoot&&managedRoot.toLowerCase()!==app.getAppPath().toLowerCase()){
  app.releaseSingleInstanceLock();const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;
  const child=spawn(join(managedRoot,'node_modules/electron/dist/electron.exe'),[managedRoot,'--scoreler-profile='+app.getPath('userData')],{cwd:managedRoot,env,detached:true,stdio:'ignore',windowsHide:true});child.unref();app.exit(0);

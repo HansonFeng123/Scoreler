@@ -4,4 +4,14 @@ function validCandidate(home,value){if(!value||!/^[a-f0-9]{40}$/.test(value.comm
 function activatePending(home){const base=path.join(home,'updates'),pending=read(path.join(base,'pending.json'));if(!validCandidate(home,pending))return null;const backup=path.join(base,'backups',new Date().toISOString().replace(/[:.]/g,'-'));fs.mkdirSync(backup,{recursive:true});
  for(const name of fs.readdirSync(home)){if(['updates','Cache','Code Cache','GPUCache','DawnGraphiteCache','DawnWebGPUCache','SingletonLock','SingletonCookie','SingletonSocket'].includes(name))continue;fs.cpSync(path.join(home,name),path.join(backup,name),{recursive:true});}
  fs.writeFileSync(path.join(base,'ready.json.tmp'),JSON.stringify({...pending,backup}));fs.renameSync(path.join(base,'ready.json.tmp'),path.join(base,'ready.json'));fs.unlinkSync(path.join(base,'pending.json'));fs.writeFileSync(path.join(base,'status.json'),JSON.stringify({state:'idle',target:pending.commit}));return {commit:pending.commit,backup};}
-module.exports={read,validCandidate,activatePending};
+function selectedCandidate(home,value,installedRoot){
+ const root=validCandidate(home,value);if(!root)return null;
+ if(installedRoot.endsWith('.asar')){
+  const current=read(path.join(installedRoot,'package.json'))?.version,candidate=read(path.join(root,'package.json'))?.version;
+  const numeric=v=>typeof v==='string'&&/^\d+\.\d+\.\d+$/.test(v)?v.split('.').map(Number):null;
+  const a=numeric(current),b=numeric(candidate);
+  if(a&&b){for(let i=0;i<3;i++){if(a[i]>b[i])return null;if(a[i]<b[i])break;}}
+ }
+ return root;
+}
+module.exports={read,validCandidate,activatePending,selectedCandidate};
