@@ -1,2 +1,8 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');const {createAppearanceStore,sanitize}=require('../electron/appearance.cjs');
 test('loads the previously selected palette before the main UI opens and persists custom colors',()=>{const dir=fs.mkdtempSync(path.join(os.tmpdir(),'scoreler-appearance-'));try{fs.mkdirSync(path.join(dir,'config'));fs.writeFileSync(path.join(dir,'config/companion.json'),JSON.stringify({palette:'amber',theme:'dark',locale:'en'}));const store=createAppearanceStore(dir);assert.equal(store.read().palette,'amber');assert.equal(store.read().theme,'dark');store.save({palette:'ocean',theme:'dark',locale:'en',variables:{'--accent':'#123456'}});assert.equal(createAppearanceStore(dir).read().variables['--accent'],'#123456');assert.throws(()=>sanitize({variables:{'--accent':'url(https://example.com)'}}));}finally{fs.rmSync(dir,{recursive:true,force:true});}});
+test('theme changes give Windows a new icon filename and preserve the selected icon across restarts',()=>{const dir=fs.mkdtempSync(path.join(os.tmpdir(),'scoreler-icon-cache-'));try{
+ const store=createAppearanceStore(dir);store.save({palette:'ocean'},Buffer.from('blue image'));const blue=store.icon;
+ store.save({palette:'amber'},Buffer.from('brown image'));const brown=store.icon;
+ assert.notEqual(blue,brown);assert.equal(fs.existsSync(blue),true);assert.equal(fs.readFileSync(brown).subarray(22).toString(),'brown image');
+ assert.equal(createAppearanceStore(dir).icon,brown);store.save({palette:'ocean'},Buffer.from('blue image'));assert.equal(store.icon,blue);
+}finally{fs.rmSync(dir,{recursive:true,force:true});}});

@@ -3,7 +3,9 @@ function paint(s){
  document.documentElement.dataset.edgeHidden=String(!!s.edgeHidden);
  $('dock').title=s.edgeAutoHide?(s.locale==='en'?'Keep pet visible':'取消贴边隐藏'):(s.locale==='en'?'Auto-hide at screen edge':'贴边自动隐藏');
  $('dock').setAttribute('aria-label',$('dock').title);$('dock').setAttribute('aria-pressed',String(!!s.edgeAutoHide));
- state=s;document.documentElement.dataset.palette=s.palette||'sage';document.documentElement.dataset.theme=s.theme==='dark'?'dark':'light';const en=s.locale==='en',summary=s.summary??{};
+ state=s;document.documentElement.dataset.palette=s.palette||'sage';document.documentElement.dataset.theme=s.theme==='dark'?'dark':'light';
+ for(const key of ['--bg','--surface','--sidebar','--text','--muted','--line','--accent','--accent-light','--hover','--control','--on-accent','--pet-outline','--pet-body','--pet-shine','--pet-eyes','--pet-cheek']){const value=s.variables?.[key];if(typeof value==='string'&&/^#[a-f0-9]{6}([a-f0-9]{2})?$/i.test(value))document.documentElement.style.setProperty(key,value);else document.documentElement.style.removeProperty(key);}
+ const en=s.locale==='en',summary=s.summary??{};
  $('pet').className=s.style+(s.expanded?' expanded':'');$('panel').hidden=!s.expanded;
  $('add-picture').title=en?'Add pictures':'添加图片';$('add-picture').setAttribute('aria-label',$('add-picture').title);$('askLabel').textContent=en?'Ask Scoreler':'问问 Scoreler';$('question').placeholder=en?'A question or a plan…':'问个问题，或安排学习……';
  $('hint').textContent=en?'Continue in Scoreler':'发送后在 Scoreler 中回答';for(const [id,label] of [['open',en?'Open Scoreler':'打开 Scoreler'],['collapse',en?'Collapse reminders':'收起提醒面板'],['hide',en?'Hide desktop companion':'隐藏桌面伙伴']]){$(id).title=label;$(id).setAttribute('aria-label',label);} $('collapse').hidden=!s.expanded;
