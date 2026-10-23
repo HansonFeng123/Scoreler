@@ -211,6 +211,11 @@ The installed updater downloads public GitHub source without sign-in. Private re
 
 ## Update log
 
+### 1.1.2
+
+- Keep the app, desktop pet, taskbar and Start shortcut colors aligned with the selected preset or custom theme. Give each generated icon a content-specific filename to avoid stale Windows icon caches.
+- Add a saved liquid-glass transparency slider with live preview, from solid to 35% transparency. Keep form controls solid and preserve the selected background and theme.
+
 ### 1.1.1
 
 - Fix reopening source updates through a Windows shortcut that omits the application folder. Install a runtime bootstrap and a separate executable with Scoreler's Windows identity and mascot icon; older updaters are repaired when the candidate first starts.

@@ -1,6 +1,6 @@
 import {CustomThemes} from './CustomThemes.js';
 import {useCustomThemes} from './useCustomThemes.js';
-import {themeVariables} from '../../../src/scoreler/appearance.js';
+import {themeVariables,glassVariables} from '../../../src/scoreler/appearance.js';
 import {syncDesktopAppearance} from './desktopAppearance.js';
 import {ChatHistory} from './ChatHistory.js';
 import {ChatDictationLinks} from './ChatDictationLinks.js';
@@ -109,6 +109,7 @@ export function Scoreler() {
    return()=>{cancelled=true;clearTimeout(timer);for(const key of Object.keys(variables))root.style.removeProperty(key);root.style.removeProperty('--custom-background');};
   },[selectedTheme,palette,dark,locale,customAppearance.loaded]);
   useEffect(()=>{localStorage.setItem('scoreler.theme',dark?'dark':'light');document.documentElement.dataset.theme=dark?'dark':'light';},[dark]);
+  useEffect(()=>{const root=document.documentElement;const apply=(level:number)=>{const colors=getComputedStyle(root),variables=glassVariables(colors.getPropertyValue('--surface').trim(),colors.getPropertyValue('--text').trim(),level);for(const [key,value]of Object.entries(variables))root.style.setProperty(key,value);};apply(customAppearance.value.glassTransparency??14);const preview=(event:Event)=>apply((event as CustomEvent<number>).detail);window.addEventListener('scoreler-glass-preview',preview);return()=>{window.removeEventListener('scoreler-glass-preview',preview);root.style.removeProperty('--glass-tint');root.style.removeProperty('--glass-opacity');};},[palette,dark,selectedTheme,customAppearance.value.glassTransparency]);
   useEffect(()=>{if(notice){const id=setTimeout(()=>setNotice(''),5000);return()=>clearTimeout(id);}},[notice]);
   const reminded=useRef(new Set<string>());
   useEffect(()=>{if(!state.preferences.reminders)return; const check=()=>{for(const e of state.events){const gap=Date.parse(e.start)-Date.now();if(!e.completed&&gap>=0&&gap<5*60000&&!reminded.current.has(e.id)){reminded.current.add(e.id);setNotice(`${t.upcomingReminder}: ${e.title}`);}}};check();const id=setInterval(check,30000);return()=>clearInterval(id);},[state.events,state.preferences.reminders,t.upcomingReminder]);
