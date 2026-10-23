@@ -9,6 +9,7 @@ for(const [key,path] of Object.entries(optional))if(existsSync(path))env[key]=re
 if(existsSync('runtime/build-cache'))env.ELECTRON_BUILDER_CACHE=resolve('runtime/build-cache');
 const project=process.cwd();
 const args=[resolve('node_modules/electron-builder/cli.js'),'--win',process.argv.includes('--dir')?'dir':'nsis','--x64','--publish','never','--config.npmRebuild=false'];
+args.push('--config.electronVersion='+JSON.parse(readFileSync('node_modules/electron/package.json','utf8')).version);
 const edition='without-free-models';
 const version=JSON.parse(readFileSync('package.json','utf8')).version;
 const commit=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
