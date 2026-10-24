@@ -263,3 +263,23 @@ npm run update:apply -- --confirm --expected <40位目标提交>
 Scoreler 自身贡献适用 [MIT 许可证](LICENSE)。依赖、字体、图标、媒体和其他组件保留各自许可，详细版本、来源与声明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)、[DEPENDENCIES.json](DEPENDENCIES.json) 和 `third-party-licenses/`。
 
 Remotion 使用独立许可，不能将整套依赖标记为 MIT。发布引用依赖的源码与分发包含依赖的安装包是不同事项；二进制分发前应核实 Remotion、编码组件等的实际条款与未解决事项。声明清单不构成对所有使用场景的法律保证。
+
+## 1.2.0 开发版：ChatGPT 套餐登录与推理控制
+
+Scoreler 根据公开的 [OpenAI OAuth 流程](https://developers.openai.com/siwc/token-sharing-open-source/sign-in)与 [Responses 接口](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference)实现，须遵守[官方条款](https://openai.com/policies/sign-in-with-chatgpt-terms/)。集成位于 packages/scoreler-chatgpt，为 Scoreler 自有代码，仅通过公开接口调用未经修改的官方 OpenAI SDK；不包含或修改 Sign in with ChatGPT DevKit。Scoreler 是免费、非商业、本地运行的开源项目，不声称获 OpenAI 背书。
+
+在桌面设置的模型区域阅读隐私说明，明确勾选套餐授权意愿，再点击 Continue with ChatGPT，由本人在官方浏览器页面完成授权。不要粘贴密码、Cookie、会话令牌或其他应用凭据。须符合账号、套餐、工作区和地区资格，不得绕过限制。原有 API 密钥服务商保持独立可用。
+
+刷新账号模型目录后选择模型；只有目录明确声明支持时才显示推理档位，否则使用模型默认。对话输入区也可选择模型和受支持的推理档位。官方 DeepSeek API 的 deepseek-flash 与 deepseek-v4-pro 提供关闭、Low、High、Max。推理档位改变伙伴表情，但保持主题配色。
+
+授权与由操作系统加密的凭据只留在 Electron 主进程，无明文降级或本地通用 HTTP 代理。每次学习推理，包括后台与工具后续请求，都需系统弹窗明确确认；拒绝不发送推理内容。仅向官方 Responses 地址发送 store:false、stream:true 请求。相关指令、对话、选中的学习记忆和资料片段、受支持图片及本地工具结果会发送给 OpenAI；登录不会导入 ChatGPT 对话。凭据不传给渲染器或后端子进程。加密连接可跨重启保留；断开会移除令牌并尝试远程撤销，失败时应到 ChatGPT 设置管理访问。
+
+受套餐和应用用量限制，不提供无限使用或通用 API 额度。用量与访问管理：https://chatgpt.com/settings/usage。不支持的模型能力会报错；本流程不提供托管文件搜索、图像生成、Code Interpreter、托管 MCP、音视频输入或 Files 上传。文档继续使用 Scoreler 本地提取流程。系统加密无法抵御已在同一用户身份下运行的恶意程序，也无法保证账号绝不受限制。
+
+玻璃透明度为 0–90%，自动本地保存。超过 35% 为文字添加保护底色，周围玻璃仍使用所选透明度。输入框与弹窗保持实底，系统减少透明度和高对比度设置优先。
+
+验证情况：用户已通过当前适配器完成官方浏览器授权；真实模型发现、简短学习对话、合成图片、本地函数调用及其后续回复均已通过。加密连接在独立进程重启后仍可用。干净的 Windows 1.2.0 包已使用隔离默认配置成功启动并显示 Scoreler。自动化还覆盖刷新、拒绝权限、额度错误、流中断、存储、响应式控件及更新回滚。模拟失败与账号实测分别记录，不能保证所有账号、模型、Windows 安装或外部服务兼容。
+
+ChatGPT 网络设置支持保存 SOCKS5/HTTP/HTTPS 代理，并独立开启或关闭；关闭后仍保留地址，可选择使用系统设置或直接连接。此设置仅作用于 ChatGPT 登录、账号模型列表与学习请求；外部浏览器授权使用浏览器自己的设置，其他 API 服务商保留原有网络设置。连接测试仅访问公开的 OpenAI 配置，不发送凭据，不代表完成账号授权。暂不支持需要账号密码的代理，地址只保存在本机桌面资料中，不进入学习数据导出。
+
+条款核对（2026-10-24）：修改过的 DevKit 开发稿已从发行源码移除。Scoreler 自有协议适配器现仅调用文档公开的服务接口及未经修改的官方 OpenAI SDK。已对授权、本地加密、用户同意、仅限本应用使用、套餐限制及断开行为进行实现核对与模拟测试；不代表 OpenAI 审批或账号不会被停用。真实账号验证与模拟失败、刷新及额度测试分别记录。

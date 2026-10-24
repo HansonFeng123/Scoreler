@@ -8,7 +8,7 @@
   },
   "main": "./dist/index.js",
   "scripts": {
-    "build": "tsc",
+    "build": "npm --workspace @scoreler/chatgpt run build && tsc",
     "dev": "tsc --watch",
     "start": "node dist/cli.js",
     "server": "node dist/server.js",

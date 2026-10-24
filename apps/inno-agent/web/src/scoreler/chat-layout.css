@@ -1,0 +1,31 @@
+/* Responsive control groups keep the selected model, account and actions distinct. */
+.scoreler .composer>.composer-toolbar{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:end;margin-top:8px}
+.scoreler .composer-controls{display:flex;align-items:center;flex-wrap:wrap;gap:10px;min-width:0}
+.scoreler .composer-controls>.icon-button{flex:0 0 36px;width:36px;height:38px;align-self:flex-start}
+.scoreler .chat-model-controls{display:grid;gap:7px;flex:1 1 260px;min-width:0}
+.scoreler .chat-model-selects{display:flex;flex-wrap:wrap;gap:8px;min-width:0}
+.scoreler .composer .chat-model-picker{flex:1 1 180px;min-width:0;max-width:340px;width:auto!important;margin:0!important;min-height:38px;padding:8px 10px!important;font-size:.8125rem!important;text-overflow:ellipsis}
+.scoreler .composer .reasoning-picker{flex:0 1 160px;max-width:180px}
+.scoreler .chatgpt-plan-info{display:flex;align-items:center;flex-wrap:wrap;gap:4px 12px;font-size:.6875rem;line-height:1.5;color:var(--muted)}
+.scoreler .chatgpt-plan-info .text-button{font-size:inherit;min-height:24px;padding:0;text-decoration:underline;text-underline-offset:3px}
+.scoreler .composer-local-status{display:flex;align-items:center;gap:5px;font-size:.6875rem;line-height:1.5;color:var(--muted);white-space:nowrap}
+.scoreler .composer-toolbar>.send{align-self:end;flex-shrink:0;width:38px;height:38px}
+.scoreler .chatgpt-settings{container-type:inline-size}
+.scoreler .chatgpt-account{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:14px 0;border-block:1px solid var(--line)}
+.scoreler .chatgpt-account p{margin:0;overflow-wrap:anywhere;flex:1 1 180px}
+.scoreler .chatgpt-settings .auth-actions{display:flex;flex-wrap:wrap;gap:10px;margin:16px 0}
+.scoreler .chatgpt-settings .auth-actions>button{display:inline-flex;align-items:center;justify-content:center;flex:1 1 150px;min-height:42px;padding:10px 14px;line-height:1.4;font-size:.8125rem;border-radius:10px}
+.scoreler .chatgpt-settings .auth-actions>.chatgpt-continue{flex:1.35 1 200px}
+.scoreler .chatgpt-account>.secondary{min-height:36px;padding:8px 12px;font-size:.75rem;line-height:1.4}
+.scoreler .chatgpt-model-fields{display:grid;grid-template-columns:minmax(0,1fr) minmax(140px,.65fr);gap:16px;align-items:start;margin:20px 0 16px}
+.scoreler .chatgpt-model-fields label{margin:0;min-width:0}
+.scoreler .chatgpt-model-fields select{min-height:40px;text-overflow:ellipsis}
+.scoreler .chatgpt-selection-actions{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin:0 0 16px}
+.scoreler .chatgpt-selection-actions>.primary{min-height:40px;padding:10px 14px;font-size:.8125rem;line-height:1.4}
+.scoreler .chatgpt-usage-link{display:inline-flex;align-items:center;min-height:36px;max-width:100%;padding:4px 0;font-size:.75rem;line-height:1.5;text-align:left;overflow-wrap:anywhere;text-decoration:underline;text-underline-offset:3px}
+.scoreler .chatgpt-policy-note{border-top:1px solid var(--line);padding-top:16px;margin-top:16px;font-size:.75rem;line-height:1.65}
+.scoreler .chatgpt-policy-note p{font-size:inherit;line-height:inherit;margin:0}
+.scoreler .chatgpt-settings .checkbox-label{align-items:flex-start;line-height:1.65}
+.scoreler .chatgpt-settings .checkbox-label input{margin-top:4px;flex-shrink:0}
+@container (max-width:430px){.scoreler .chatgpt-model-fields{grid-template-columns:minmax(0,1fr)}.scoreler .chatgpt-selection-actions>.primary{width:100%}}
+@media(max-width:900px){.scoreler .composer-local-status{flex-basis:100%;padding-left:46px}.scoreler .composer>.composer-toolbar{gap:8px}.scoreler .composer .chat-model-picker{max-width:none}.scoreler .composer .reasoning-picker{flex:1 1 120px}}

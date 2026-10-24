@@ -1,0 +1,11 @@
+{
+  "name": "@scoreler/chatgpt",
+  "version": "1.2.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/client.js",
+  "exports": "./src/client.js",
+  "license": "MIT",
+  "scripts": {"build":"node --check src/client.js && node --check src/oauth.js && node --check src/vault.js","test":"node --test test/*.test.mjs"},
+  "dependencies": {"openai":"^7.43.0","jose":"^6.2.8","proper-lockfile":"^4.1.2"}
+}

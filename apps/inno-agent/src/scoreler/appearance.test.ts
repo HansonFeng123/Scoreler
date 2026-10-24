@@ -2,12 +2,12 @@ import {it,expect} from 'vitest';
 import {appearanceState,themeVariables,glassVariables} from './appearance.js';
 it('preserves saved picture/color themes and rejects unsafe or oversized pictures',()=>{const t={id:'example',name:'My theme',background:'#123456',accent:'#ffcc00',image:'data:image/png;base64,AAAA'};expect(appearanceState({selected:t.id,themes:[t]}).themes[0]).toEqual(t);expect(()=>appearanceState({selected:t.id,themes:[{...t,image:'https://example.com/private.jpg'}]})).toThrow();expect(()=>appearanceState({selected:t.id,themes:[{...t,image:'data:image/svg+xml;base64,AAAA'}]})).toThrow();expect(()=>appearanceState({selected:'missing',themes:[t]})).toThrow();expect(()=>appearanceState({selected:null,themes:[t,t]})).toThrow();});
 it('keeps the selected RGB colors and provides readable button and text colors',()=>{const v=themeVariables({id:'t',name:'t',background:'#111111',accent:'#ffff00'});expect(v['--bg']).toBe('#111111');expect(v['--accent']).toBe('#ffff00');expect(v['--on-accent']).toBe('#000000');expect(v['--text']).toBe('#f5f5f5');});
-it('migrates and validates the saved glass setting',()=>{expect(appearanceState({selected:null,themes:[]}).glassTransparency).toBe(14);expect(appearanceState({selected:null,themes:[],glassTransparency:35}).glassTransparency).toBe(35);for(const glassTransparency of [-1,36,NaN,'25'])expect(()=>appearanceState({selected:null,themes:[],glassTransparency})).toThrow();});
+it('migrates and validates the saved glass setting',()=>{expect(appearanceState({selected:null,themes:[]}).glassTransparency).toBe(14);expect(appearanceState({selected:null,themes:[],glassTransparency:90}).glassTransparency).toBe(90);for(const glassTransparency of [-1,91,NaN,'25'])expect(()=>appearanceState({selected:null,themes:[],glassTransparency})).toThrow();});
 it('keeps text readable at the minimum and maximum glass transparency',()=>{
  const rgb=(h:string)=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16)),lum=(c:number[])=>c.map(v=>{const s=v/255;return s<=.04045?s/12.92:((s+.055)/1.055)**2.4;}).reduce((x,v,i)=>x+v*[.2126,.7152,.0722][i],0);
- for(const [surface,text]of [['#ffffff','#202020'],['#151e26','#dbe8f0'],['#332b3b','#e9e1ed']])for(const level of [0,14,35]){
+ for(const [surface,text]of [['#ffffff','#202020'],['#151e26','#dbe8f0'],['#332b3b','#e9e1ed']])for(const level of [0,14,35,36,60,90]){
   const v=glassVariables(surface,text,level);expect(v['--glass-opacity']).toBe((100-level)+'%');
-  for(const picture of [0,255]){const bg=lum(rgb(v['--glass-tint']).map(n=>n*(1-level/100)+picture*level/100)),fg=lum(rgb(text));expect((Math.max(bg,fg)+.05)/(Math.min(bg,fg)+.05)).toBeGreaterThanOrEqual(4.5);}
+  for(const picture of [0,255]){const bg=lum(rgb(v['--glass-tint']).map(n=>level>35?n*(240/255)+(n*(1-level/100)+picture*level/100)*(15/255):n*(1-level/100)+picture*level/100)),fg=lum(rgb(text));expect((Math.max(bg,fg)+.05)/(Math.min(bg,fg)+.05)).toBeGreaterThanOrEqual(4.5);}
  }
 });
 it('keeps text readable over glass with bright and dark pictures and extreme accents',()=>{

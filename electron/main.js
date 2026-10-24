@@ -1,3 +1,5 @@
+import {createNetworkPreferences} from './network-preferences.js';
+import {createChatGPTIntegration} from './chatgpt.js';
 import appearanceHelper from './appearance.cjs';
 import runtimeBootstrap from '../scripts/runtime-bootstrap.cjs';
 import windowsShortcut from './windows-shortcut.cjs';
@@ -12,7 +14,7 @@ import {setupMail} from './mail-integration.js';
 import {setupStudyBrowser} from './study-browser.js';
 import { randomBytes } from 'node:crypto';
 import {createCompanion} from './companion.js';
-import { app, BrowserWindow, Tray, Menu, shell, dialog, clipboard, nativeImage, ipcMain, screen, Notification } from "electron";
+import { app, BrowserWindow, Tray, Menu, shell, dialog, clipboard, nativeImage, ipcMain, screen, Notification, safeStorage, net, session } from "electron";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { spawn, execFile, execFileSync } from "node:child_process";
 import { createServer as createNetServer } from "node:net";
@@ -38,7 +40,7 @@ if(managedRoot&&managedRoot.toLowerCase()!==app.getAppPath().toLowerCase()){
 app.on('second-instance',()=>showMainWindow());
 
 // macOS 上避免未签名 app 触发钥匙串权限弹窗
-app.commandLine.appendSwitch("use-mock-keychain");
+// OS-backed credential protection is required for ChatGPT sign-in.
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 let scorelerIcon = join(__dirname,process.platform==='win32'?"scoreler.ico":"scoreler.png");
@@ -113,6 +115,10 @@ ipcMain.handle('scoreler-source-update-apply',async(event,target)=>{
 });
 let loadingWindow = null;
 let serverProcess = null;
+const network=createNetworkPreferences({app,session});
+ipcMain.handle('scoreler-network',async(event,action,value)=>{validateUpdateSender(event);if(event.senderFrame!==mainWindow.webContents.mainFrame)throw Error('Invalid network caller');try{return await network.action(action,value);}catch{throw Error('Could not apply proxy settings. Check the address and connection.');}});
+const chatgpt=createChatGPTIntegration({app,safeStorage,shell,dialog,getWindow:()=>mainWindow,fetch:network.fetch});
+ipcMain.handle('scoreler-chatgpt',async(event,action,value)=>{validateUpdateSender(event);if(event.senderFrame!==mainWindow.webContents.mainFrame)throw Error('Invalid authentication caller');try{return await chatgpt.action(action,value);}catch(error){throw Error(error?.name==='ChatGPTError'?error.message:'ChatGPT operation failed. Check permission and OS credential protection, then try again.');}});
 let tray = null;
 let isQuitting = false;
 const companion=createCompanion({getAppearance:()=>appearanceStore.read(),home:innoHome,getMainWindow:()=>mainWindow,getPort:()=>serverPort,showMainWindow:()=>showMainWindow(),isQuitting:()=>isQuitting});
@@ -605,9 +611,10 @@ async function startServer(onReady) {
     // capabilities like computer-use (see plugins.computerUse in config.ts).
     env: { ...process.env, ELECTRON_RUN_AS_NODE: "1", INNO_DESKTOP: "1", SCORELER_DESKTOP_TOKEN: desktopToken, SCORELER_INSTANCE_ID: serverInstance, SCORELER_FREE_MODELS:'0', INIT_CWD:innoHome,SCORELER_MAIL_PORT:String(mailIntegration?.port??0),SCORELER_MAIL_TOKEN:desktopToken },
     cwd:innoHome,
-    stdio: ["ignore", "pipe", "pipe"],
+    stdio: ["ignore", "pipe", "pipe", "ipc"],
   });
 
+  chatgpt.attach(serverProcess);
   serverProcess.stdout.on("data", (d) => {
     appendServerOutput(d);
     console.log("[server]", d.toString());
@@ -713,4 +720,3 @@ app.on("before-quit", () => {
   companion.dispose();
   serverProcess?.kill();
 });
-

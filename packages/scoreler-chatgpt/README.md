@@ -1,0 +1,9 @@
+# Scoreler ChatGPT integration
+
+Scoreler-owned code implements the published [public-client OAuth flow](https://developers.openai.com/siwc/token-sharing-open-source/sign-in), [account lifecycle](https://developers.openai.com/siwc/token-sharing-open-source/profiles-and-sessions) and [Responses interface](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference). It calls the official `openai` SDK through its public API. It does not contain, patch, wrap internal functions of, or redistribute the Sign in with ChatGPT DevKit. OAuth/OIDC verification uses `jose`; those third-party dependencies retain their own licenses.
+
+The Electron main process supplies OS encryption and the selected network session. Tokens remain in a local encrypted vault, never in renderer state or the study backend. Ciphertext migration preserves an existing private draft connection; no credentials ship with this package. The app registers as Scoreler, persists its opaque host identity, validates callback state, uses PKCE S256 and verifies the signed identity against OpenAI's JWKS and the issued client ID. Refresh checkpoints are encrypted before key verification, preserving rotated credentials through temporary key-service failures.
+
+The app must obtain explicit user authorization before sign-in and inference. The caller provides native confirmations for background requests and tool follow-ups. No pooled accounts, automatic account rotation, general API proxy, limit bypass, browser-cookie reuse or developer charge for subscription use is provided. Account eligibility and service limits still apply. Read the [official terms](https://openai.com/policies/sign-in-with-chatgpt-terms/) and preserve the distinction between passing software tests and verifying a real account request.
+
+Run `npm --workspace @scoreler/chatgpt test` for synthetic protocol, storage, refresh and inference tests. These never consume a real account's plan.

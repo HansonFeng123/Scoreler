@@ -1,3 +1,5 @@
+import {reasoningProvider} from '../scoreler/reasoning.js';
+import {chatGPTProvider} from '../scoreler/chatgpt-provider.js';
 import { createScorelerExtension } from '../scoreler/extension.js';
 import {
 	createAgentSessionFromServices,
@@ -363,9 +365,10 @@ export async function initSession(
 				baseUrl: providerConfig.baseUrl,
 				apiKey: providerConfig.apiKey || "local",
 				api: providerConfig.api ?? "openai-completions",
+                ...(providerConfig.api==='scoreler-chatgpt'?chatGPTProvider(providerConfig.api):reasoningProvider(providerConfig)),
 				headers: providerConfig.headers,
 				authHeader: providerConfig.authHeader,
-				
+
 				models: providerConfig.models.map(modelConfigToProviderModel),
 			});
 			_registeredProviderIds.add(providerId);
@@ -500,9 +503,10 @@ export async function refreshConfiguredProviders(config: InnoConfig): Promise<vo
 			baseUrl: providerConfig.baseUrl,
 			apiKey: providerConfig.apiKey || "local",
 			api: providerConfig.api ?? "openai-completions",
+                ...(providerConfig.api==='scoreler-chatgpt'?chatGPTProvider(providerConfig.api):reasoningProvider(providerConfig)),
 			headers: providerConfig.headers,
 			authHeader: providerConfig.authHeader,
-			
+
 			models: providerConfig.models.map(modelConfigToProviderModel),
 		});
 		_registeredProviderIds.add(providerId);
@@ -1460,7 +1464,7 @@ export async function completePromptOnce(prompt: string, maxTokens = 64, timeout
 	if (!_runtime) return "";
 	const session = _runtime.session;
 	const model = session.model;
-	if (!model) return "";
+	if (!model || model.api==='scoreler-chatgpt') return "";
 
 	const auth = await registryOf(session).getApiKeyAndHeaders(model);
 	if (!auth.ok || !auth.apiKey) return "";

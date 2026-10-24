@@ -32,3 +32,8 @@
  .scoreler :is(.sidebar,.panel,.today-primary,.today-detail,.composer,.chat-history,.home-chatbox,.chat,.page-heading,.today-heading,.home-encouragement) { background:var(--surface); backdrop-filter:none; -webkit-backdrop-filter:none; }
 }
 @media (prefers-reduced-motion:reduce) { .scoreler * { scroll-behavior:auto; } }
+
+/* At high transparency, protect reading surfaces independently of the glass. */
+.scoreler :is(h1,h2,h3,h4,p,label,li,th,td,.space-label,.sidebar-footer,.chat-history>button,.sidebar nav button,.message-content,.tool-status) { background-color:var(--glass-content,transparent); border-radius:6px; box-decoration-break:clone; -webkit-box-decoration-break:clone; }
+
+.scoreler .chatgpt-continue {background:#000;color:#fff;border:1px solid #fff;border-radius:12px;padding:12px 20px;font-weight:600;}

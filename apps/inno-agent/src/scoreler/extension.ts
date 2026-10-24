@@ -1,3 +1,5 @@
+import {reasoningProvider} from './reasoning.js';
+import {chatGPTProvider} from './chatgpt-provider.js';
 import {createDictationTools,DICTATION_PROMPT} from './dictation-tools.js';
 import {TASK_ROUTING_PROMPT} from './task-routing.js';
 import {createSetupTools} from './setup-tools.js';
@@ -18,7 +20,7 @@ export function createScorelerExtension(holder:{current:InnoConfig},paths:Runtim
  return async pi=>{
   const store=studentStore(paths.dataDir);
   for(const [id,provider] of Object.entries(holder.current.providers))pi.registerProvider(id,{
-   baseUrl:provider.baseUrl,apiKey:provider.apiKey||'local',api:provider.api??'openai-completions',headers:provider.headers,authHeader:provider.authHeader,
+   baseUrl:provider.baseUrl,apiKey:provider.apiKey||'local',api:provider.api??'openai-completions',...(provider.api==='scoreler-chatgpt'?chatGPTProvider(provider.api):reasoningProvider(provider)),headers:provider.headers,authHeader:provider.authHeader,
    models:provider.models.map(m=>({id:m.id,name:m.name,reasoning:m.reasoning,input:m.input,cost:{input:0,output:0,cacheRead:0,cacheWrite:0},contextWindow:m.contextWindow,maxTokens:m.maxTokens,compat:{supportsDeveloperRole:false}})),
   });
   for(const tool of [...createStudentTools(paths.dataDir,()=>holder.current,getSessionId),...createDictationTools(paths.dataDir),...createTavilyTools(holder),...createEmailTools(),...createSetupTools(holder)])pi.registerTool(tool);

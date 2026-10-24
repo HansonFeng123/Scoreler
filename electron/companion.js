@@ -12,7 +12,7 @@ export function createCompanion({home,getMainWindow,getPort,showMainWindow,isQui
  const log=(event)=>{try{mkdirSync(join(home,'data','log'),{recursive:true});appendFileSync(join(home,'data','log','companion.log'),JSON.stringify({at:new Date().toISOString(),event,enabled:prefs.enabled,expanded})+'\n');}catch{}};
  const deliveredFile=join(home,'config','pet-reminders.json');let delivered;try{delivered=new Set(JSON.parse(readFileSync(deliveredFile,'utf8')));}catch{delivered=new Set();}let lastCheck=Date.now()-30000,reminder=null;
  const persist=()=>{mkdirSync(dirname(file),{recursive:true});writeFileSync(file,JSON.stringify(prefs,null,2));};
- const state=()=>{const appearance=getAppearance?.();return {...prefs,...(appearance?{palette:appearance.palette,theme:appearance.theme,variables:appearance.variables}:{}),expanded,edgeHidden:dockHidden,summary,reminder:reminder&&reminder.expires>Date.now()?reminder:null};};
+ const state=()=>{const appearance=getAppearance?.();return {...prefs,...(appearance?{palette:appearance.palette,theme:appearance.theme,variables:appearance.variables,reasoning:appearance.reasoning}:{}),expanded,edgeHidden:dockHidden,summary,reminder:reminder&&reminder.expires>Date.now()?reminder:null};};
  const emit=()=>{if(window&&!window.isDestroyed())window.webContents.send('scoreler-companion-state',state());};
  const isPet=e=>window&&!window.isDestroyed()&&e.sender===window.webContents;
  const authorized=e=>isPet(e)||(getMainWindow()&&e.sender===getMainWindow().webContents&&e.sender.getURL().startsWith(`http://127.0.0.1:${getPort()}/`));
@@ -58,4 +58,3 @@ export function createCompanion({home,getMainWindow,getPort,showMainWindow,isQui
  ipcMain.on('scoreler-companion-drag',(e,phase)=>{if(!isPet(e))return;if(phase==='start'){drag={cursor:screen.getCursorScreenPoint(),bounds:window.getBounds()};}else if(phase==='move'&&drag){if(prefs.edgeAutoHide){prefs.edgeAutoHide=false;dockHidden=false;emit();}const p=screen.getCursorScreenPoint(),area=screen.getDisplayNearestPoint(p).workArea;window.setBounds(helpers.clampBounds({...drag.bounds,x:drag.bounds.x+p.x-drag.cursor.x,y:drag.bounds.y+p.y-drag.cursor.y},area));}else if(phase==='end'&&drag){const b=window.getBounds();prefs.x=b.x;prefs.y=b.y;drag=null;persist();}});
  return {refreshAppearance:emit,alert(value){reminder={title:String(value.title).slice(0,200),body:String(value.body).slice(0,500),expires:Date.now()+120000};emit();},start(){stopped=false;if(prefs.enabled)create();void refresh();if(!timer)timer=setInterval(()=>void refresh(),15000);if(!edgeTimer)edgeTimer=setInterval(watchEdge,100);},enabled:()=>prefs.enabled,toggle:()=>update({enabled:!prefs.enabled}),dispose(){stopped=true;clearInterval(timer);clearInterval(edgeTimer);window?.destroy();}};
 }
-

@@ -8,7 +8,7 @@ afterEach(()=>{cleanup();vi.clearAllMocks();});
 it('previews the slider immediately and saves the setting without discarding the selected theme',()=>{
  const preview=vi.fn();window.addEventListener('scoreler-glass-preview',preview);
  render(<GlassTransparency en notice={()=>{}}/>);const slider=screen.getByRole('slider',{name:'Glass transparency'});
- fireEvent.change(slider,{target:{value:'30'}});expect(screen.getByText('30%')).toBeTruthy();expect(preview).toHaveBeenCalledTimes(1);
- fireEvent.pointerUp(slider);expect(saveCustomThemes).toHaveBeenCalledWith(expect.objectContaining({glassTransparency:30,selected:'saved',themes:expect.arrayContaining([expect.objectContaining({id:'saved'})])}));
+ fireEvent.change(slider,{target:{value:'90'}});expect(screen.getByText('90%')).toBeTruthy();expect(preview).toHaveBeenCalledTimes(1);
+ fireEvent.pointerUp(slider);expect(saveCustomThemes).toHaveBeenCalledWith(expect.objectContaining({glassTransparency:90,selected:'saved',themes:expect.arrayContaining([expect.objectContaining({id:'saved'})])}));
  window.removeEventListener('scoreler-glass-preview',preview);
 });

@@ -1,3 +1,5 @@
+import {reasoningProvider} from '../scoreler/reasoning.js';
+import {chatGPTProvider} from '../scoreler/chatgpt-provider.js';
 import { createStudentTools, SCORELER_PROMPT } from '../scoreler/tools.js';
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -244,6 +246,7 @@ export function createInnoExtension(
 				baseUrl: providerConfig.baseUrl,
 				apiKey: providerConfig.apiKey || "local",
 				api: providerConfig.api ?? "openai-completions",
+                ...(providerConfig.api==='scoreler-chatgpt'?chatGPTProvider(providerConfig.api):reasoningProvider(providerConfig)),
 				headers: providerConfig.headers,
 				authHeader: providerConfig.authHeader,
 				models: providerConfig.models.map((m) => ({
@@ -838,8 +841,3 @@ export function createInnoExtension(
 		}
 	};
 }
-
-
-
-
-

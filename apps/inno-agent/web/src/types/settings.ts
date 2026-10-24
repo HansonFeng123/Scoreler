@@ -10,6 +10,7 @@ export interface InnoModelInfo {
 }
 
 export interface InnoProviderModel {
+ reasoningLevel?: "none"|"low"|"high"|"max";
  supportsTools?: boolean;
 	id: string;
 	name: string;

@@ -10,6 +10,7 @@ export type InnoModelInput = "text" | "image";
 
 export interface InnoModelConfig {
 	supportsTools?: boolean;
+ reasoningLevel?: "none"|"low"|"high"|"max";
 	id: string;
 	name: string;
 	reasoning: boolean;
@@ -359,6 +360,7 @@ export function normalizeModelConfig(model: Partial<InnoModelConfig> & { id: str
 		name: (model.name?.trim() || id),
         ...(model.supportsTools === false ? { supportsTools: false } : {}),
 		reasoning: Boolean(model.reasoning),
+        ...(["none","low","high","max"].includes(model.reasoningLevel??"")?{reasoningLevel:model.reasoningLevel}:{}),
 		input: supportsImages ? ["text", "image"] : ["text"],
 		contextWindow: contextWindow !== undefined && Number.isFinite(contextWindow) && contextWindow > 0 ? Math.trunc(contextWindow) : 128000,
 		maxTokens: maxTokens !== undefined && Number.isFinite(maxTokens) && maxTokens > 0 ? Math.trunc(maxTokens) : 8192,
@@ -775,4 +777,3 @@ export function getSkillsDir(projectDir: string): string {
 export function getL2DataDir(projectDir: string): string {
 	return join(projectDir, "data", "l2");
 }
-

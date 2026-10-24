@@ -1,13 +1,14 @@
 {
   "name": "scoreler-desktop",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "private": true,
   "description": "Scoreler is a personal AI agent focused on studying.",
   "author": "Inno Agent Contributors",
   "type": "module",
   "workspaces": [
     "apps/inno-agent",
-    "apps/inno-agent/web"
+    "apps/inno-agent/web",
+    "packages/scoreler-chatgpt"
   ],
   "main": "electron/entry.cjs",
   "scripts": {
@@ -57,7 +58,10 @@
       "source-update.json",
       "scripts/update-dependencies.cjs",
       "scripts/runtime-bootstrap.cjs",
-      "scripts/brand-runtime.ps1"
+      "scripts/brand-runtime.ps1",
+      "packages/scoreler-chatgpt/src/**/*",
+      "packages/scoreler-chatgpt/LICENSE",
+      "packages/scoreler-chatgpt/README.md"
     ],
     "asarUnpack": [
       "**/node_modules/node-pty/**/*",
@@ -158,7 +162,8 @@
     "html-to-text": "^10.0.1",
     "imapflow": "^2.5.8",
     "inno-agent": "^0.7.0",
-    "mailparser": "^3.10.0"
+    "mailparser": "^3.10.0",
+    "@scoreler/chatgpt": "file:packages/scoreler-chatgpt"
   },
   "license": "MIT",
   "scorelerEdition": "without-free-models"

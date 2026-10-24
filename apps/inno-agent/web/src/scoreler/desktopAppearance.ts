@@ -1,5 +1,5 @@
 let generation=0;
-export async function syncDesktopAppearance(value:{palette:string;theme:string;locale:string;variables:Record<string,string>;image?:string}){
+export async function syncDesktopAppearance(value:{reasoning?:string;palette:string;theme:string;locale:string;variables:Record<string,string>;image?:string}){
  const current=++generation;
  if(!window.scorelerDesktop?.syncAppearance)return;
  const colors=getComputedStyle(document.documentElement),color=(key:string)=>colors.getPropertyValue(key).trim();
