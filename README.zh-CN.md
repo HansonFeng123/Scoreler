@@ -264,6 +264,12 @@ Scoreler 自身贡献适用 [MIT 许可证](LICENSE)。依赖、字体、图标�
 
 Remotion 使用独立许可，不能将整套依赖标记为 MIT。发布引用依赖的源码与分发包含依赖的安装包是不同事项；二进制分发前应核实 Remotion、编码组件等的实际条款与未解决事项。声明清单不构成对所有使用场景的法律保证。
 
+## 1.2.1
+
+- 保持原有 0–35% 的玻璃外观。超过 35% 后平滑调整整块材质，不再为文字添加不透明条带。
+- 精简对话输入框，对齐附件、模型、推理和发送控件，降低用量信息的视觉权重。
+- 发布前检查实际桌面对话、工具流程及三个窗口宽度下的输入框布局。
+
 ## 1.2.0：ChatGPT 套餐登录与推理控制
 
 Scoreler 根据公开的 [OpenAI OAuth 流程](https://developers.openai.com/siwc/token-sharing-open-source/sign-in)与 [Responses 接口](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference)实现，须遵守[官方条款](https://openai.com/policies/sign-in-with-chatgpt-terms/)。集成位于 packages/scoreler-chatgpt，为 Scoreler 自有代码，仅通过公开接口调用未经修改的官方 OpenAI SDK；不包含或修改 Sign in with ChatGPT DevKit。Scoreler 是免费、非商业、本地运行的开源项目，不声称获 OpenAI 背书。
@@ -276,7 +282,7 @@ Scoreler 根据公开的 [OpenAI OAuth 流程](https://developers.openai.com/siw
 
 受套餐和应用用量限制，不提供无限使用或通用 API 额度。用量与访问管理：https://chatgpt.com/settings/usage。不支持的模型能力会报错；本流程不提供托管文件搜索、图像生成、Code Interpreter、托管 MCP、音视频输入或 Files 上传。文档继续使用 Scoreler 本地提取流程。系统加密无法抵御已在同一用户身份下运行的恶意程序，也无法保证账号绝不受限制。
 
-玻璃透明度为 0–90%，自动本地保存。超过 35% 为文字添加保护底色，周围玻璃仍使用所选透明度。输入框与弹窗保持实底，系统减少透明度和高对比度设置优先。
+玻璃透明度为 0–90%，自动本地保存。整块玻璃的背景模糊和色调平滑调整，保持文字清晰，不再为文字添加不透明条带。输入框与弹窗保持实底，系统减少透明度和高对比度设置优先。
 
 验证情况：用户已通过当前适配器完成官方浏览器授权；真实模型发现、简短学习对话、合成图片、本地函数调用及其后续回复均已通过。加密连接在独立进程重启后仍可用。干净的 Windows 1.2.0 包已使用隔离默认配置成功启动并显示 Scoreler。自动化还覆盖刷新、拒绝权限、额度错误、流中断、存储、响应式控件及更新回滚。模拟失败与账号实测分别记录，不能保证所有账号、模型、Windows 安装或外部服务兼容。
 

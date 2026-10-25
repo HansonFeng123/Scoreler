@@ -5,9 +5,9 @@ it('keeps the selected RGB colors and provides readable button and text colors',
 it('migrates and validates the saved glass setting',()=>{expect(appearanceState({selected:null,themes:[]}).glassTransparency).toBe(14);expect(appearanceState({selected:null,themes:[],glassTransparency:90}).glassTransparency).toBe(90);for(const glassTransparency of [-1,91,NaN,'25'])expect(()=>appearanceState({selected:null,themes:[],glassTransparency})).toThrow();});
 it('keeps text readable at the minimum and maximum glass transparency',()=>{
  const rgb=(h:string)=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16)),lum=(c:number[])=>c.map(v=>{const s=v/255;return s<=.04045?s/12.92:((s+.055)/1.055)**2.4;}).reduce((x,v,i)=>x+v*[.2126,.7152,.0722][i],0);
- for(const [surface,text]of [['#ffffff','#202020'],['#151e26','#dbe8f0'],['#332b3b','#e9e1ed']])for(const level of [0,14,35,36,60,90]){
+ for(const [surface,text]of [['#ffffff','#202020'],['#151e26','#dbe8f0'],['#332b3b','#e9e1ed']])for(let level=0;level<=90;level++){
   const v=glassVariables(surface,text,level);expect(v['--glass-opacity']).toBe((100-level)+'%');
-  for(const picture of [0,255]){const bg=lum(rgb(v['--glass-tint']).map(n=>level>35?n*(240/255)+(n*(1-level/100)+picture*level/100)*(15/255):n*(1-level/100)+picture*level/100)),fg=lum(rgb(text));expect((Math.max(bg,fg)+.05)/(Math.min(bg,fg)+.05)).toBeGreaterThanOrEqual(4.5);}
+  for(const picture of [0,255]){const bg=lum(rgb(v['--glass-tint']).map(n=>n*(1-level/100)+Math.min(255,Math.max(0,((picture-127.5)*Number(v['--glass-contrast'])+127.5)*Number(v['--glass-brightness'])))*level/100)),fg=lum(rgb(text));expect((Math.max(bg,fg)+.05)/(Math.min(bg,fg)+.05)).toBeGreaterThanOrEqual(4.5);}
  }
 });
 it('keeps text readable over glass with bright and dark pictures and extreme accents',()=>{
@@ -20,3 +20,12 @@ it('keeps text readable over glass with bright and dark pictures and extreme acc
   for(const picture of [0,255]){const glass=rgb(v['--surface']).map(n=>n*.86+picture*.14);for(const key of ['--text','--muted','--accent-ink'] as const)expect(ratio(rgb(v[key]),glass)).toBeGreaterThanOrEqual(4.5);}
  }
 });
+
+it('keeps the material continuous through 35 percent without text backings',()=>{
+ const a=glassVariables('#ffffff','#202020',35),b=glassVariables('#ffffff','#202020',36);
+ expect(a).not.toHaveProperty('--glass-content');expect(b).not.toHaveProperty('--glass-content');
+ expect(Math.abs(Number(a['--glass-contrast'])-Number(b['--glass-contrast']))).toBeLessThan(.02);
+ expect(Math.abs(Number(a['--glass-brightness'])-Number(b['--glass-brightness']))).toBeLessThan(.02);
+});
+
+it('preserves the original glass material from zero through 35 percent',()=>{for(let level=0;level<=35;level++){const v=glassVariables('#ffffff','#202020',level);expect(v['--glass-blur']).toBe('26px');expect(v['--glass-contrast']).toBe('1');expect(v['--glass-brightness']).toBe('1');}});

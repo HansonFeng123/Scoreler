@@ -310,6 +310,12 @@ Scoreler builds on [Inno Agent](https://github.com/hhyqhh/inno-agent), [Pi](http
 
 Scoreler's own source license is in [LICENSE](LICENSE). Dependency licenses remain separate. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and the full texts in `third-party-licenses`. Publishing source that references Remotion is distinct from distributing an installer containing Remotion, FFmpeg and other binaries. Review the relevant terms and corresponding-source requirements before binary distribution. The inventory and checks are not universal legal clearance.
 
+## 1.2.1
+
+- Preserve the original 0–35% glass appearance. Above 35%, continuously adjust the panel material instead of adding opaque strips behind text.
+- Compact the chat composer, align attachment/model/reasoning/send controls, and keep usage details secondary.
+- Check real desktop chat/tool flow and composer layout at three window widths before publication.
+
 ## 1.2.0: ChatGPT plan sign-in and reasoning controls
 
 Scoreler implements the published [OpenAI OAuth flow](https://developers.openai.com/siwc/token-sharing-open-source/sign-in) and [Responses interface](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference), subject to the [official terms](https://openai.com/policies/sign-in-with-chatgpt-terms/). The integration is Scoreler-owned code in packages/scoreler-chatgpt and calls the unmodified official OpenAI SDK through its public API. No Sign in with ChatGPT DevKit code is included or modified. Scoreler is a free, noncommercial, locally running open-source project. No OpenAI endorsement is claimed.
@@ -322,7 +328,7 @@ Sign-in and OS-protected encrypted credentials remain in Electron's main process
 
 Subscription and app limits apply; this supplies neither unlimited usage nor general API credits. Manage usage/access at https://chatgpt.com/settings/usage. Unsupported account/model capabilities produce an error; hosted file search, image generation, Code Interpreter, hosted MCP, audio/video input and Files uploads are not offered through this flow. Documents use Scoreler's existing local extraction workflow. OS protection does not protect against malicious software already running as the user. Account suspension risk cannot be guaranteed away.
 
-Glass transparency now spans 0–90% and saves locally. Above 35%, text receives a protective backing while the surrounding glass remains at the chosen transparency. Inputs and modal dialogs stay solid; system reduced-transparency/high-contrast preferences take precedence.
+Glass transparency now spans 0–90% and saves locally. The glass uses continuous backdrop blur and tonal adjustment to preserve text contrast without opaque strips behind labels. Inputs and modal dialogs stay solid; system reduced-transparency/high-contrast preferences take precedence.
 
 Verification: the user completed official browser authorization through the current adapter. Live checks passed for account-specific model discovery, a short study conversation, a synthetic picture, a local function call and its follow-up. The encrypted connection survived a separate process restart. A clean Windows 1.2.0 package launched and rendered Scoreler with isolated default settings. Automated checks also cover refresh, denial, quota errors, interrupted streams, storage, responsive controls and updater rollback. Simulated failures are not live-account tests, and these checks do not guarantee every account, model, Windows installation or external service will work.
 
