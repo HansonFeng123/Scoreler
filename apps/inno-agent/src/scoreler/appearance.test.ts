@@ -3,11 +3,13 @@ import {appearanceState,themeVariables,glassVariables} from './appearance.js';
 it('preserves saved picture/color themes and rejects unsafe or oversized pictures',()=>{const t={id:'example',name:'My theme',background:'#123456',accent:'#ffcc00',image:'data:image/png;base64,AAAA'};expect(appearanceState({selected:t.id,themes:[t]}).themes[0]).toEqual(t);expect(()=>appearanceState({selected:t.id,themes:[{...t,image:'https://example.com/private.jpg'}]})).toThrow();expect(()=>appearanceState({selected:t.id,themes:[{...t,image:'data:image/svg+xml;base64,AAAA'}]})).toThrow();expect(()=>appearanceState({selected:'missing',themes:[t]})).toThrow();expect(()=>appearanceState({selected:null,themes:[t,t]})).toThrow();});
 it('keeps the selected RGB colors and provides readable button and text colors',()=>{const v=themeVariables({id:'t',name:'t',background:'#111111',accent:'#ffff00'});expect(v['--bg']).toBe('#111111');expect(v['--accent']).toBe('#ffff00');expect(v['--on-accent']).toBe('#000000');expect(v['--text']).toBe('#f5f5f5');});
 it('migrates and validates the saved glass setting',()=>{expect(appearanceState({selected:null,themes:[]}).glassTransparency).toBe(14);expect(appearanceState({selected:null,themes:[],glassTransparency:90}).glassTransparency).toBe(90);for(const glassTransparency of [-1,91,NaN,'25'])expect(()=>appearanceState({selected:null,themes:[],glassTransparency})).toThrow();});
-it('keeps text readable at the minimum and maximum glass transparency',()=>{
- const rgb=(h:string)=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16)),lum=(c:number[])=>c.map(v=>{const s=v/255;return s<=.04045?s/12.92:((s+.055)/1.055)**2.4;}).reduce((x,v,i)=>x+v*[.2126,.7152,.0722][i],0);
- for(const [surface,text]of [['#ffffff','#202020'],['#151e26','#dbe8f0'],['#332b3b','#e9e1ed']])for(let level=0;level<=90;level++){
-  const v=glassVariables(surface,text,level);expect(v['--glass-opacity']).toBe((100-level)+'%');
-  for(const picture of [0,255]){const bg=lum(rgb(v['--glass-tint']).map(n=>n*(1-level/100)+Math.min(255,Math.max(0,((picture-127.5)*Number(v['--glass-contrast'])+127.5)*Number(v['--glass-brightness'])))*level/100)),fg=lum(rgb(text));expect((Math.max(bg,fg)+.05)/(Math.min(bg,fg)+.05)).toBeGreaterThanOrEqual(4.5);}
+it('reveals progressively more background without increasing blur or changing tone',()=>{
+ for(const [surface,text]of [['#ffffff','#202020'],['#151e26','#dbe8f0']]){
+  let previous=glassVariables(surface,text,0);const tint=previous['--glass-tint'];
+  for(let level=1;level<=90;level++){const value=glassVariables(surface,text,level);
+   expect(parseFloat(value['--glass-opacity'])).toBeLessThan(parseFloat(previous['--glass-opacity']));
+   expect(value['--glass-tint']).toBe(tint);expect(value['--glass-blur']).toBe('26px');expect(value['--glass-contrast']).toBe('1');expect(value['--glass-brightness']).toBe('1');previous=value;
+  }
  }
 });
 it('keeps text readable over glass with bright and dark pictures and extreme accents',()=>{

@@ -14,9 +14,8 @@ function contrast(a:string,b:string){const x=bright(a),y=bright(b);return (Math.
 export function glassVariables(surface:string,text:string,transparency:number){
  const level=Number.isFinite(transparency)?Math.max(0,Math.min(90,Math.round(transparency))):14;
  const tint=mix(surface,bright(text)>.4?'#000000':'#ffffff',.96);
- // Adjust the entire backdrop continuously; never put opaque strips behind text.
- const amount=Math.max(0,(level-35)/55),light=bright(text)<=.4;
- return {'--glass-tint':tint,'--glass-opacity':(100-level)+'%','--glass-blur':(26+16*amount)+'px','--glass-contrast':String(1-.7*amount),'--glass-brightness':String(light?1+.9*amount:1-.5*amount)};
+ // Transparency changes only the tint alpha. Blur and tone stay fixed.
+ return {'--glass-tint':tint,'--glass-opacity':(100-level)+'%','--glass-blur':'26px','--glass-contrast':'1','--glass-brightness':'1'};
 }
 export function themeVariables(t:CustomTheme){
  const dark=bright(t.background)<.22,ink=dark?'#f5f5f5':'#202020';

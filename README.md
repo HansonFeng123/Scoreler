@@ -310,6 +310,14 @@ Scoreler builds on [Inno Agent](https://github.com/hhyqhh/inno-agent), [Pi](http
 
 Scoreler's own source license is in [LICENSE](LICENSE). Dependency licenses remain separate. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and the full texts in `third-party-licenses`. Publishing source that references Remotion is distinct from distributing an installer containing Remotion, FFmpeg and other binaries. Review the relevant terms and corresponding-source requirements before binary distribution. The inventory and checks are not universal legal clearance.
 
+## 1.2.2
+
+- Fix transparency: only glass tint opacity changes from 0–90%; blur, brightness and contrast stay fixed. The input area keeps its existing size.
+- Move ChatGPT plan/usage information beside the reasoning selector and remove its extra row.
+- Restore the recent-conversation context menu over glass. Deletion still requires confirmation and preserves saved notes/materials.
+- Add an independent **Use saved proxy for GitHub updates** option in App updates. It uses the address saved under ChatGPT connection, independently of that connection's enable switch. It applies to GitHub version checks and source downloads; npm dependencies continue to use npm's network settings. SOCKS5, HTTP and HTTPS addresses without credentials are supported; the proxy option requires curl on the system (included with supported Windows versions).
+- Stream update downloads with byte progress, retry incomplete transfers, and allow up to 15 minutes per archive attempt. Preparation and activation still preserve the old version and back up the profile.
+
 ## 1.2.1
 
 - Preserve the original 0–35% glass appearance. Above 35%, continuously adjust the panel material instead of adding opaque strips behind text.
@@ -328,7 +336,7 @@ Sign-in and OS-protected encrypted credentials remain in Electron's main process
 
 Subscription and app limits apply; this supplies neither unlimited usage nor general API credits. Manage usage/access at https://chatgpt.com/settings/usage. Unsupported account/model capabilities produce an error; hosted file search, image generation, Code Interpreter, hosted MCP, audio/video input and Files uploads are not offered through this flow. Documents use Scoreler's existing local extraction workflow. OS protection does not protect against malicious software already running as the user. Account suspension risk cannot be guaranteed away.
 
-Glass transparency now spans 0–90% and saves locally. The glass uses continuous backdrop blur and tonal adjustment to preserve text contrast without opaque strips behind labels. Inputs and modal dialogs stay solid; system reduced-transparency/high-contrast preferences take precedence.
+Glass transparency now spans 0–90% and saves locally. The slider changes only the glass tint opacity; blur, brightness and contrast stay fixed across 0–90%. Inputs and modal dialogs stay solid; system reduced-transparency/high-contrast preferences take precedence.
 
 Verification: the user completed official browser authorization through the current adapter. Live checks passed for account-specific model discovery, a short study conversation, a synthetic picture, a local function call and its follow-up. The encrypted connection survived a separate process restart. A clean Windows 1.2.0 package launched and rendered Scoreler with isolated default settings. Automated checks also cover refresh, denial, quota errors, interrupted streams, storage, responsive controls and updater rollback. Simulated failures are not live-account tests, and these checks do not guarantee every account, model, Windows installation or external service will work.
 
