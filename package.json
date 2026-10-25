@@ -19,7 +19,8 @@
     "test:updater": "node --test scripts/source-updater.test.cjs",
     "update:check": "node scripts/source-updater.cjs check",
     "update:apply": "node scripts/source-updater.cjs apply",
-    "package:win": "npm run build && node scripts/scoreler-package-win.mjs"
+    "package:win": "npm run build && node scripts/scoreler-package-win.mjs",
+    "test:chatgpt-desktop": "npm --workspace inno-agent run build && npm --workspace inno-agent-web run build && electron scripts/verify-chatgpt-desktop.cjs"
   },
   "engines": {
     "node": ">=24.0.0"

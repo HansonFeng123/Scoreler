@@ -33,3 +33,5 @@ it('explains the official pre-browser 403 in the notification without reflecting
  render(<ChatGPTSettings en notice={notice}/>);fireEvent.click(screen.getByRole('checkbox'));fireEvent.click(screen.getByRole('button',{name:'Continue with ChatGPT'}));
  await waitFor(()=>expect(notice).toHaveBeenCalledWith(expect.stringContaining('HTTP 403')));expect(JSON.stringify(notice.mock.calls)).not.toContain('synthetic-private-error');
 });
+
+it('lets the user restore chat confirmation without changing background consent',async()=>{const api=vi.fn().mockResolvedValue({session:{status:'connected',sharing:true},models:[],askBeforeUserChat:false});window.scorelerDesktop={chatgpt:api} as any;render(<ChatGPTSettings en notice={()=>{}}/>);const toggle=await screen.findByRole('checkbox',{name:'Ask before using my ChatGPT plan for messages I send'});expect((toggle as HTMLInputElement).checked).toBe(false);fireEvent.click(toggle);await waitFor(()=>expect(api).toHaveBeenCalledWith('chat-prompts',{ask:true}));});

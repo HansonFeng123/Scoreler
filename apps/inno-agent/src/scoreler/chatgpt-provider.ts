@@ -1,3 +1,5 @@
+import {chatGPTUserTurn} from './chatgpt-activity.js';
+import {getCurrentSystemPrompt,getCurrentTools,normalizeContext} from '@earendil-works/pi-ai';
 import {randomUUID} from 'node:crypto';
 import {registerApiProvider} from '@earendil-works/pi-ai/compat';
 import {AssistantMessageEventStream} from '@earendil-works/pi-ai/utils/event-stream';
@@ -5,8 +7,9 @@ import type {AssistantMessage,Context,Model,SimpleStreamOptions} from '@earendil
 
 /** Converts only study content and local functions. No credential or endpoint fields. */
 export function studyRequest(model:string,context:Context){
+ const transcript=normalizeContext(context);
  const input:unknown[]=[];
- for(const message of context.messages){
+ for(const message of transcript.messages){
   if(message.role==='user')input.push({role:'user',content:typeof message.content==='string'?message.content:message.content.map(c=>c.type==='text'?{type:'input_text',text:c.text}:{type:'input_image',image_url:`data:${c.mimeType};base64,${c.data}`})});
   else if(message.role==='assistant'){
    const checkpoint=message.content.find(c=>c.type==='thinking'&&c.thinkingSignature?.startsWith('scoreler-response-output:'));
@@ -20,11 +23,13 @@ export function studyRequest(model:string,context:Context){
   }
   else if(message.role==='toolResult')input.push({type:'function_call_output',call_id:message.toolCallId.split('|')[0],output:message.content.filter(c=>c.type==='text').map(c=>c.text).join('\n')});
  }
- const functions=context.tools?.map(t=>({type:'function',name:t.name,description:t.description,parameters:t.parameters,strict:false}));
- return {model,instructions:context.systemPrompt,input,...(functions?.length?{tools:[{type:'namespace',name:'scoreler',description:'Scoreler local study tools',tools:functions}]}:{})};
+ // Pi carries instructions and current tool declarations in transcript system messages.
+ const functions=getCurrentTools(transcript.messages).map(t=>({type:'function',name:t.name,description:t.description,parameters:t.parameters,strict:false}));
+ return {model,instructions:getCurrentSystemPrompt(transcript.messages),input,...(functions.length?{tools:[{type:'namespace',name:'scoreler',description:'Scoreler local study tools',tools:functions}]}:{})};
 }
 
 export function streamChatGPT(model:Model<any>,context:Context,options?:SimpleStreamOptions){
+ const allowedTools=getCurrentTools(normalizeContext(context).messages);
  const stream=new AssistantMessageEventStream();
  const output:AssistantMessage={role:'assistant',content:[],api:model.api,provider:model.provider,model:model.id,usage:{input:0,output:0,cacheRead:0,cacheWrite:0,totalTokens:0,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}},stopReason:'stop',timestamp:Date.now()};
  void (async()=>{
@@ -53,7 +58,7 @@ export function streamChatGPT(model:Model<any>,context:Context,options?:SimpleSt
        }
       }
       for(const item of raw.output??[])if(item.type==='function_call'){
-       if(!context.tools?.some(t=>t.name===item.name)||item.namespace&&item.namespace!=='scoreler'){cleanup();reject(Error('ChatGPT returned an unsupported tool.'));return;}
+       if(!allowedTools.some(t=>t.name===item.name)||item.namespace&&item.namespace!=='scoreler'){cleanup();reject(Error('ChatGPT returned an unsupported tool.'));return;}
        let args;try{args=JSON.parse(item.arguments);}catch{cleanup();reject(Error('ChatGPT returned invalid tool arguments.'));return;}
        const tool={type:'toolCall' as const,id:item.call_id,name:item.name,arguments:args};const index=output.content.push(tool)-1;
        stream.push({type:'toolcall_start',contentIndex:index,partial:output});stream.push({type:'toolcall_end',contentIndex:index,toolCall:tool,partial:output});
@@ -62,7 +67,7 @@ export function streamChatGPT(model:Model<any>,context:Context,options?:SimpleSt
      }
     };
     process.on('message',receive);options?.signal?.addEventListener('abort',cancel,{once:true});timer=setTimeout(()=>{abort();cleanup();reject(Error('ChatGPT request timed out.'));},240_000);
-    process.send!({type:'scoreler-chatgpt-request',id,payload:studyRequest(model.id,context)},error=>{if(error){cleanup();reject(Error('Scoreler desktop connection closed.'));}});
+    process.send!({type:'scoreler-chatgpt-request',id,payload:{...studyRequest(model.id,context),userTurnId:chatGPTUserTurn()}},error=>{if(error){cleanup();reject(Error('Scoreler desktop connection closed.'));}});
    });
    stream.push({type:'done',reason:output.stopReason as 'stop'|'toolUse',message:output});stream.end();
   }catch(error){output.stopReason=options?.signal?.aborted?'aborted':'error';output.errorMessage=error instanceof Error?error.message:'ChatGPT request failed';stream.push({type:'error',reason:output.stopReason,error:output});stream.end();}

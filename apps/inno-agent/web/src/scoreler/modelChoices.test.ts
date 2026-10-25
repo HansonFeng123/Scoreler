@@ -1,0 +1,3 @@
+import {it,expect} from 'vitest';
+import {modelChoices} from './modelChoices.js';
+it('retains API-provider models when a ChatGPT plan model is selected',()=>{const settings:any={defaultProvider:'scoreler-chatgpt',defaultModel:'gpt-synthetic',providers:{deepseek:{baseUrl:'https://api.deepseek.com/v1',api:'openai-completions',models:[{id:'deepseek-flash',name:'DeepSeek Flash'},{id:'deepseek-v4-pro',name:'DeepSeek Pro'}]},'scoreler-chatgpt':{baseUrl:'https://api.openai.com/v1',api:'scoreler-chatgpt',models:[{id:'gpt-synthetic',name:'Synthetic GPT'}]}}};const choices=modelChoices(settings);expect(choices.map(m=>m.provider+':'+m.id)).toEqual(['scoreler-chatgpt:gpt-synthetic','deepseek:deepseek-flash','deepseek:deepseek-v4-pro']);});

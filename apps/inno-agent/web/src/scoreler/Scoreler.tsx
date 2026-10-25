@@ -208,6 +208,7 @@ function Assistant({t,locale,initialPrompt,autoSend,consumeAutoSend,consume,chan
     const sentImages=(attachments??images).map(image=>({...image,id:'id'in image?String(image.id):crypto.randomUUID(),name:'name'in image?String(image.name):'Screenshot'}));const sentDocuments=fresh?[]:documents;const plainPrompt=(message??prompt).trim()||(locale==='en'?'Help me with the attached study material.':'请使用附加的学习资料帮助我。');const userPrompt=plainPrompt+sentDocuments.map(doc=>'\n\n['+doc.name.replace(/[\[\]\n\r]/g,'_')+'](scoreler-document:'+doc.id+')').join('');setPrompt('');setImages([]);setDocuments([]);setBusy(true);setThinking(true);setStatus(t.thinking);
     const controller=new AbortController();abortRef.current=controller;
     try {
+      await window.scorelerDesktop?.chatgpt?.('begin-user-turn',{requestId});
       const id=(fresh?null:sessionId)??(await createSession()).id;setSessionId(id);localStorage.setItem('scoreler.session',id);
       setMessages(m=>[...(fresh?[]:m),{role:'user',content:userPrompt,timestamp:Date.now(),images:sentImages.map(image=>({previewUrl:`data:${image.mimeType};base64,${image.data}`,mimeType:image.mimeType}))},{role:'assistant',content:'',timestamp:Date.now()}]);
       for await(const envelope of streamChat(userPrompt,id,requestId,controller.signal,sentImages.map(({data,mimeType})=>({data,mimeType})))){
@@ -226,7 +227,7 @@ function Assistant({t,locale,initialPrompt,autoSend,consumeAutoSend,consume,chan
       }
       void refreshHistory();await changed();
     }catch(e){if(!controller.signal.aborted){setPrompt(plainPrompt);setImages(sentImages);setDocuments(sentDocuments);notice(e instanceof Error?e.message:String(e));}}
-    finally{setBusy(false);setThinking(false);setStatus('');turnRef.current='';}
+    finally{void window.scorelerDesktop?.chatgpt?.('end-user-turn',{requestId}).catch(()=>{});setBusy(false);setThinking(false);setStatus('');turnRef.current='';}
   };
   const handledAutoSend=useRef('');
   useEffect(()=>{if(!autoSend)return;const timer=setTimeout(()=>{if(handledAutoSend.current===autoSend.id)return;handledAutoSend.current=autoSend.id;consumeAutoSend();void sendMessage(autoSend.text,true,autoSend.id,autoSend.images);},0);return()=>clearTimeout(timer);},[autoSend?.id]);

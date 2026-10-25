@@ -353,6 +353,10 @@ export async function initSession(
 				noThemes: true,
 			},
 		});
+		const loadedStudyExtensions = services.resourceLoader.getExtensions();
+		if (!loadedStudyExtensions.extensions.some(extension => extension.tools.has('student_note_create'))) {
+			throw new Error('Scoreler study tools failed to load: ' + loadedStudyExtensions.errors.map(error => error.error).join('; '));
+		}
 		// Register Inno's configured providers into the fresh services registry so
 		// that find() below can locate the current default model — even if it was
 		// switched *after* initSession was called (the closure-captured `config`

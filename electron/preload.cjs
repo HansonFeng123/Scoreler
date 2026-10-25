@@ -53,7 +53,7 @@ contextBridge.exposeInMainWorld("innoDesktop", {
 
 contextBridge.exposeInMainWorld("scorelerDesktop", {
  network:(action,value)=>{if(!['state','save','test'].includes(action))return Promise.reject(Error('Invalid network action'));return ipcRenderer.invoke('scoreler-network',action,value);},
- chatgpt:(action,value)=>{if(!['state','signin','cancel','disconnect','models','select','usage'].includes(action))return Promise.reject(Error('Invalid ChatGPT action'));return ipcRenderer.invoke('scoreler-chatgpt',action,value);},
+ chatgpt:(action,value)=>{if(!['state','signin','cancel','disconnect','models','select','usage','begin-user-turn','end-user-turn','chat-prompts'].includes(action))return Promise.reject(Error('Invalid ChatGPT action'));return ipcRenderer.invoke('scoreler-chatgpt',action,value);},
  syncAppearance:value=>ipcRenderer.invoke('scoreler-appearance-set',value),
  syncTimer:value=>ipcRenderer.invoke('scoreler-timer-sync',value),
  onTimerExpired:fn=>{const listener=(_event,value)=>fn(value);ipcRenderer.on('scoreler-timer-expired',listener);return()=>ipcRenderer.removeListener('scoreler-timer-expired',listener);},

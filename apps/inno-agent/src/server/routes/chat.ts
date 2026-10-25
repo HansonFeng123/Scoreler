@@ -1,3 +1,4 @@
+import {withChatGPTUserTurn} from '../../scoreler/chatgpt-activity.js';
 import type { IncomingMessage as HttpReq, ServerResponse } from "node:http";
 import { existsSync, mkdirSync, statSync, watch, writeFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
@@ -944,7 +945,7 @@ export async function handleChatRoutes(
 
 		promptStartTime = Date.now();
 		try {
-			await runPromptStreamingInSession(targetSessionPath, prompt, onEvent, imageArgs, {
+			await withChatGPTUserTurn(clientRequestId,()=>runPromptStreamingInSession(targetSessionPath, prompt, onEvent, imageArgs, {
 				token: state.turnId,
 				shouldStart: () => !state.cancelRequested,
 				isCancellationRequested: () => state.cancelRequested,
@@ -1067,7 +1068,7 @@ export async function handleChatRoutes(
 						}
 					}
 				},
-			}, streamWorkspaceRoot, imageFallbackPrompt, attachmentContext || undefined);
+			}, streamWorkspaceRoot, imageFallbackPrompt, attachmentContext || undefined));
 		} catch (err) {
 			logger.error({ err, sessionId: state.sessionId, turnId: state.turnId }, "SSE chat turn failed");
 		} finally {
