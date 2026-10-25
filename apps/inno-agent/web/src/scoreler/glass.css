@@ -36,3 +36,8 @@
 /* Reading contrast belongs to the continuous glass material, not individual text blocks. */
 
 .scoreler .chatgpt-continue {background:#000;color:#fff;border:1px solid #fff;border-radius:12px;padding:12px 20px;font-weight:600;}
+
+/* Menus render outside backdrop-filter containing blocks. */
+.chat-history-context.panel{margin:0;padding:6px;min-width:200px;max-width:calc(100vw - 16px);background:var(--surface);color:var(--text);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 36px #0003}
+.chat-history-context button{display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;text-align:left;border-radius:8px;font-size:.8125rem}
+.chat-history-context button:hover,.chat-history-context button:focus-visible{background:var(--hover)}
