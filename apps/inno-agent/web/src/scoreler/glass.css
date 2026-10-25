@@ -14,7 +14,7 @@
 .scoreler .home-encouragement { background:var(--glass); backdrop-filter:blur(26px); border-radius:12px; padding:12px 16px; margin-top:0; color:var(--text); }
 .scoreler :is(input,textarea,select,.secondary,.segmented,.search-box) { background:var(--surface); color:var(--text); }
 .scoreler :is(input,textarea)::placeholder { color:var(--text); opacity:.7; }
-.scoreler :is(.panel .panel,.panel .composer,.today-detail .home-chatbox) { background:var(--surface); backdrop-filter:none; box-shadow:none; }
+.scoreler :is(.panel .panel,.panel .composer) { background:var(--surface); backdrop-filter:none; box-shadow:none; }
 .scoreler .primary,.scoreler .send { background:var(--accent); background-image:none; color:var(--on-accent,#fff); font-weight:600; }
 .scoreler .modal { background:var(--surface); color:var(--text); border:1px solid var(--line); backdrop-filter:none; }
 .scoreler .modal .button-row { display:flex; flex-direction:row; justify-content:flex-end; gap:12px; margin-top:24px; }
@@ -41,3 +41,6 @@
 .chat-history-context.panel{margin:0;padding:6px;min-width:200px;max-width:calc(100vw - 16px);background:var(--surface);color:var(--text);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 36px #0003}
 .chat-history-context button{display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;text-align:left;border-radius:8px;font-size:.8125rem}
 .chat-history-context button:hover,.chat-history-context button:focus-visible{background:var(--hover)}
+
+/* The home prompt shares its parent card material; only the field stays solid. */
+.scoreler.scoreler .today-detail .home-chatbox{background:transparent;background-image:none;backdrop-filter:none;-webkit-backdrop-filter:none;box-shadow:none}

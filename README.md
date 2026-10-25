@@ -313,7 +313,7 @@ Scoreler's own source license is in [LICENSE](LICENSE). Dependency licenses rema
 ## 1.2.2
 
 - Fix transparency: only glass tint opacity changes from 0–90%; blur, brightness and contrast stay fixed. The input area keeps its existing size.
-- Move ChatGPT plan/usage information beside the reasoning selector and remove its extra row.
+- Move ChatGPT plan/usage information beside the reasoning selector and remove its extra row. Remove the extra solid rectangle around the home-page Ask Scoreler panel.
 - Restore the recent-conversation context menu over glass. Deletion still requires confirmation and preserves saved notes/materials.
 - Add an independent **Use saved proxy for GitHub updates** option in App updates. It uses the address saved under ChatGPT connection, independently of that connection's enable switch. It applies to GitHub version checks and source downloads; npm dependencies continue to use npm's network settings. SOCKS5, HTTP and HTTPS addresses without credentials are supported; the proxy option requires curl on the system (included with supported Windows versions).
 - Stream update downloads with byte progress, retry incomplete transfers, and allow up to 15 minutes per archive attempt. Preparation and activation still preserve the old version and back up the profile.
