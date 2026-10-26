@@ -56,6 +56,9 @@ Scoreler 是面向学生的本地学习助手，将日程规划、AI 学习助�
 
 ### 百宝箱插件
 
+[离线中英双向翻译插件](https://github.com/HansonFeng123/scoreler-offline-translator)内置两个 OPUS-MT 模型与浏览器 CPU 运行时。更新至 Scoreler 1.3.2 后，在插件目录安装。模型全部包含在安装包中，因此下载较大；翻译文本仅在隔离工具内处理，不保存历史。致谢：赫尔辛基大学 / OPUS-MT（英译中 Apache-2.0，中译英 CC-BY-4.0）、Xenova ONNX 转换、Transformers.js（Apache-2.0）和 ONNX Runtime（MIT）。完整来源、许可与质量限制见插件 README。
+
+
 ![百宝箱插件](docs/images/zh-CN/plugins.png)
 
 ## 功能
@@ -210,6 +213,12 @@ npm run update:apply -- --confirm --expected <40位目标提交>
 连接本地资料后等待索引完成。笔记、视频、练习和错题支持学科分类，新生成内容优先显示。计算器支持括号、运算优先级、正负号、百分比和科学计数法；百分号表示除以 100，例如 `200 × 15% = 30`，不使用商业计算器的隐式百分比规则。
 
 ## 更新日志
+
+### 1.3.2
+
+- 插件目录新增可下载的离线中英双向神经翻译，内置 OPUS-MT 模型、Transformers.js 和 ONNX Runtime，附完整开源致谢与许可。安装后无需账号、API 密钥或网络。
+- 增加支持模型大小安装包的独立 WebAssembly 插件格式；原有 v1 工具保留大小与沙箱限制。
+- 翻译在 CPU 上运行，短句质量与首次加载速度取决于模型和电脑，重要译文请核对。
 
 ### 1.3.1
 

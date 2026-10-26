@@ -103,3 +103,8 @@ Scoreler's pixel mascot and application icons are project-generated assets. The 
 - tmp-promise 3.0.3: MIT (package supplies no top-level license text)
 - tr46 0.0.3: MIT (package supplies no top-level license text)
 - truncate-utf8-bytes 1.0.2: WTFPL (package supplies no top-level license text)
+
+
+## Optional offline translator plugin
+
+The translator is distributed separately at https://github.com/HansonFeng123/scoreler-offline-translator and is installed only when requested through Toolbox. Its bundled models and browser runtime are not part of this source snapshot. OPUS-MT: University of Helsinki, English–Chinese Apache-2.0 and Chinese–English CC-BY-4.0; ONNX conversions/quantization by Xenova; Transformers.js Apache-2.0; ONNX Runtime MIT. The plugin repository and ZIP retain the full licence texts, model provenance and visible credits.

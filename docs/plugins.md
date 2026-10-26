@@ -1,10 +1,10 @@
-# Toolbox plugin format (v1)
+# Toolbox plugin formats
 
 The application-controlled `plugins.json` is authoritative. Updating Scoreler replaces that catalog; installing plugins never changes it. Search uses catalog name, description, subjects and keywords only. Catalog entries pin the owner/repository, release tag, exact asset URL, version, compatibility and SHA-256. A GitHub release and its asset uploader must match the catalog owner. Redirects are limited to explicit GitHub release-asset hosts and paths. This integrity check is not a code audit or guarantee of safety.
 
 ## Package
 
-A flat ZIP contains `manifest.json`, `index.html`, and optionally `LICENSE` and `README.md`. No directories, symlinks, encrypted entries, duplicate names or additional files are accepted. Maximum compressed size is 5 MB and extracted size is 10 MB. All HTML, CSS and JavaScript must be bundled in index.html; dependencies remain in the plugin source repository and are not installed by Scoreler.
+A flat ZIP contains `manifest.json`, `index.html`, and optionally `LICENSE` and `README.md`. No directories, symlinks, encrypted entries or duplicate names (including case collisions) are accepted. V1 accepts only those four files. Format v1 keeps its maximum compressed size of 5 MB and extracted size of 10 MB. From Scoreler 1.3.2, format v2 (`apiVersion: 2`) permits self-contained WebAssembly tools up to 256 MB compressed and 384 MB extracted. V2 also permits flat `asset-*.json`, `.js`, `.wasm`, `.onnx` and `.txt` resources within the same package (up to 30 total entries). Directories, native libraries and executables remain forbidden. Resources are read only from that plugin’s package and served through its isolated session; no cross-plugin or external fetch is allowed. V2 allows same-package scripts and fetch plus CSP `wasm-unsafe-eval`; external network, workers, filesystem, Node, host data and permissions remain unavailable. The opaque sandbox origin and denied storage/permissions are retained. Catalogue entries opt into v2 explicitly with `apiVersion: 2`. Large downloads are bounded to 15 minutes. V1 bundles HTML, CSS and JavaScript in index.html. V2 may use the allowed flat asset files; no npm dependencies or native libraries are installed by Scoreler. Large v2 packages use bounded byte ranges with retries, verified Content-Range headers and a final package checksum; the UI displays downloaded bytes.
 
 Example manifest:
 
@@ -18,7 +18,7 @@ IDs and version strings are validated; unknown fields and any nonempty permissio
 
 From Scoreler 1.3.1, enabled installed plugins have cards in Toolbox and open in a main-process-owned WebContentsView inside the main window. The plugin receives no host preload. Bounds follow the visible tool slot; leaving the tool, reloading, disabling or uninstalling closes its renderer. This does not change the v1 package format.
 
-The only host context is the immutable `window.ScorelerPlugin` object with `apiVersion: 1` and `locale: "en" | "zh-CN"`. No private data or credentials are included. There is no privileged preload, Node integration or plugin IPC. Each launch uses a fresh in-memory Electron session with a sandboxed renderer and restrictive CSP. Network requests, external navigation, new windows, downloads and permission grants are blocked. Tools must tolerate unavailable localStorage/IndexedDB and browser workers.
+The only host context is the immutable `window.ScorelerPlugin` object with the package `apiVersion` (1 or 2) and `locale: "en" | "zh-CN"`. No private data or credentials are included. There is no privileged preload, Node integration or plugin IPC. Each launch uses a fresh in-memory Electron session with a sandboxed renderer and restrictive CSP. Network requests, external navigation, new windows, downloads and permission grants are blocked. Tools must tolerate unavailable localStorage/IndexedDB and browser workers.
 
 This is a browser sandbox, not an operating-system container. A malicious tool could exhaust resources or exploit a browser flaw. Review the source and author before installation. No plugin safety certification is implied.
 
