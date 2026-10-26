@@ -47,3 +47,16 @@
 
 .plugins-page{display:grid;gap:20px}.plugin-heading{display:flex;justify-content:space-between;gap:16px;align-items:start}.plugin-heading p{margin:10px 0 18px}.plugin-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px}.plugin-card,.plugin-review{display:flex;flex-direction:column;gap:14px;min-width:0}.plugin-card small,.plugin-review small{overflow-wrap:anywhere;color:var(--text);font-size:.75rem}.plugin-card .button-row{display:flex;flex-wrap:wrap;gap:10px}.plugin-review p{overflow-wrap:anywhere}.plugins-page input{margin:12px 0}
 .dictation-library{display:grid;gap:24px}.dictation-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(280px,100%),1fr));gap:20px}.dictation-card{display:flex;flex-direction:column;gap:16px;min-width:0}.dictation-open{display:flex;flex-direction:column;align-items:flex-start;text-align:left;gap:12px;background:none;border:0;color:var(--text);padding:0;min-height:100px}.dictation-open strong{overflow-wrap:anywhere}.dictation-attempts{display:flex;flex-wrap:wrap;gap:10px;margin:20px 0}.dictation-attempts h3{width:100%}.dictation-practice .section-heading{flex-wrap:wrap;gap:12px}
+
+/* Keep folder navigation readable over pictures, with aligned form actions. */
+.scoreler .subject-breadcrumb.panel{display:flex;align-items:center;flex-wrap:wrap;gap:16px;padding:14px 20px;margin:0;border-radius:16px}
+.dictation-subject-row{display:flex;align-items:flex-end;flex-wrap:wrap;gap:12px;margin:20px 0}
+.dictation-subject-row label{display:grid;gap:8px;flex:0 1 320px;min-width:0}
+.dictation-subject-row input{width:100%;margin:0}
+.dictation-subject-row button{margin:0;min-height:44px;align-self:flex-end}
+.dictation-submit-row{display:flex;align-items:flex-end;flex-wrap:wrap;gap:16px;margin-top:24px}
+.dictation-grading-instructions{display:grid;gap:8px;flex:1 1 320px;max-width:640px;min-width:0}
+.dictation-grading-instructions textarea{width:100%;margin:0;resize:vertical}
+.dictation-submit-row>.primary{margin:0;min-height:44px}
+
+.embedded-plugin{min-width:0;padding:16px}.embedded-plugin .section-heading{margin-bottom:12px;gap:12px;flex-wrap:wrap}.embedded-plugin-slot{height:max(360px,calc(100vh - 250px));position:relative;overflow:hidden;background:var(--surface);border-radius:8px}.toolbox-tile small{font-size:.72rem}

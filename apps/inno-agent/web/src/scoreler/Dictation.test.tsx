@@ -12,8 +12,8 @@ it('browses subjects and submits typed answers with correction',async()=>{
  const marked={...sheet,attempt:{answers:['aple'],correct:[false],feedback:['Spell it apple.'],submittedAt:'2026-01-02'}};
  vi.mocked(apiFetch).mockImplementation(async(path:any)=>path==='/api/student/dictations'?[sheet]:path.includes('/subject-folders')?[]:path.endsWith('/submit')?marked:{saved:true});
  render(<Dictation en notice={vi.fn()}/>);fireEvent.click(await screen.findByRole('button',{name:/Biology/}));fireEvent.click(screen.getByRole('button',{name:'Open exercise'}));
- fireEvent.change(await screen.findByLabelText('Answer 1'),{target:{value:'aple'}});fireEvent.click(screen.getByText('Submit for AI correction'));await screen.findByText(/Spell it apple/);
- expect(apiFetch).toHaveBeenCalledWith('/api/student/dictations/example/submit',expect.objectContaining({body:JSON.stringify({answers:['aple']})}));
+ fireEvent.change(await screen.findByLabelText('Answer 1'),{target:{value:'aple'}});fireEvent.change(screen.getByLabelText('Grading instructions (optional)'),{target:{value:'Accept synonyms.'}});fireEvent.click(screen.getByText('Submit for AI correction'));await screen.findByText(/Spell it apple/);
+ expect(apiFetch).toHaveBeenCalledWith('/api/student/dictations/example/submit',expect.objectContaining({body:JSON.stringify({answers:['aple'],gradingInstructions:'Accept synonyms.'})}));
 });
 it('shows read-only saved attempts without overwriting the current draft',async()=>{
  const current={...sheet,draftAnswers:['current draft']},attempt={id:'attempt-one',sheetId:sheet.id,answers:['older answer'],correct:[false],feedback:['Earlier feedback'],submittedAt:'2026-01-01'};
