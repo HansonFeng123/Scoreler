@@ -55,6 +55,7 @@ export class StudentStore {
     }
   }
   close() { this.db.close(); }
+  transaction<T>(run:()=>T):T {this.db.exec("BEGIN");try{const result=run();this.db.exec("COMMIT");return result;}catch(error){this.db.exec("ROLLBACK");throw error;}}
   proposePlan(title: string, rawEvents: unknown[], sessionId?: string) {
     if (!Array.isArray(rawEvents) || !rawEvents.length) throw new StudentError('A plan needs at least one session');
     return this.put('plans', { id: randomUUID(), title: text(title,'title',200), events: rawEvents.map(validateEvent), ...(sessionId?{sessionId}:{}), createdAt: new Date().toISOString() });

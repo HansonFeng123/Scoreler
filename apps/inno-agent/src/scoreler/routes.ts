@@ -1,7 +1,7 @@
 import {appearanceState} from './appearance.js';
 import {randomUUID} from 'node:crypto';
 import {featureLayout} from './feature-layout.js';
-import {generateDictation,gradeDictation,dictationCompletion,type DictationSheet} from './dictation.js';
+import {generateDictation,gradeDictation,dictationHistory,deleteDictation,dictationCompletion,type DictationSheet} from './dictation.js';
 import type {InnoConfig} from '../config.js';
 import {capsules,addCapsule,deleteCapsule} from './capsules.js';
 import {subjectFolders,addSubjectFolder} from './subject-folders.js';
@@ -28,7 +28,10 @@ export async function handleStudentRoutes(req: IncomingMessage, res: ServerRespo
     }else if(pathname==='/api/student/feature-layout'&&method==='GET'){json(res,200,featureLayout(store.get('meta','feature-layout')));
     }else if(pathname==='/api/student/feature-layout'&&method==='PUT'){const layout=featureLayout(await body());store.put('meta',{id:'feature-layout',...layout});json(res,200,layout);
     }else if(pathname==='/api/student/dictations'&&method==='GET'){json(res,200,store.list<DictationSheet>('dictations').reverse());
-    }else if(/^\/api\/student\/dictations\/[a-f0-9-]+\/draft$/.test(pathname)&&method==='PUT'){const id=pathname.split('/')[4],sheet=store.get<DictationSheet>('dictations',id),b=await body();if(!sheet||!Array.isArray(b.answers)||b.answers.length!==sheet.items.length||b.answers.some(a=>typeof a!=='string'||a.length>4000))throw new StudentError('Invalid draft');store.put('dictations',{...sheet,draftAnswers:b.answers});json(res,200,{saved:true});
+    }else if(/^\/api\/student\/dictations\/[a-f0-9-]+\/draft$/.test(pathname)&&method==='PUT'){const id=pathname.split('/')[4],b=await body(),sheet=store.get<DictationSheet>('dictations',id);if(!sheet||!Array.isArray(b.answers)||b.answers.length!==sheet.items.length||b.answers.some(a=>typeof a!=='string'||a.length>4000))throw new StudentError('Invalid draft');store.put('dictations',{...sheet,draftAnswers:b.answers});json(res,200,{saved:true});
+    }else if(/^\/api\/student\/dictations\/[a-f0-9-]+\/history$/.test(pathname)&&method==='GET'){json(res,200,dictationHistory(dataDir,pathname.split('/')[4]));
+    }else if(/^\/api\/student\/dictations\/[a-f0-9-]+$/.test(pathname)&&method==='DELETE'){json(res,200,deleteDictation(dataDir,pathname.split('/')[4]));
+    }else if(/^\/api\/student\/dictations\/[a-f0-9-]+$/.test(pathname)&&method==='PUT'){const id=pathname.split('/')[4],sheet=store.get<DictationSheet>('dictations',id),b=await body();if(!sheet||typeof b.subject!=='string'||b.subject.length>80)throw new StudentError('Invalid subject');store.put('dictations',{...sheet,subject:b.subject.trim()});json(res,200,store.get('dictations',id));
     }else if(pathname==='/api/student/chat-attachment'&&method==='POST'){const b=await body();if(typeof b.name!=='string'||typeof b.data!=='string')throw new StudentError('Missing document');const doc=await importStudyDocument(dataDir,{name:b.name,data:Buffer.from(b.data,'base64'),source:'Chat uploads/'+randomUUID()+'/'+b.name});await waitForIndexing(dataDir);const indexed=store.get<{id:string;name:string;status:string;error?:string}>('documents',doc.id);if(indexed?.status!=='ready')throw new StudentError(indexed?.error||'Unable to read this file');json(res,201,{id:indexed.id,name:indexed.name});
     }else if(pathname==='/api/student/dictations'&&method==='POST'){if(!getConfig)throw new StudentError('Model configuration unavailable');json(res,201,await generateDictation(dataDir,await body(),prompt=>dictationCompletion(getConfig(),prompt)));
     }else if(/^\/api\/student\/dictations\/[a-f0-9-]+\/submit$/.test(pathname)&&method==='POST'){if(!getConfig)throw new StudentError('Model configuration unavailable');const b=await body();json(res,200,await gradeDictation(dataDir,pathname.split('/')[4],b.answers,prompt=>dictationCompletion(getConfig(),prompt)));
