@@ -52,6 +52,7 @@ contextBridge.exposeInMainWorld("innoDesktop", {
 });
 
 contextBridge.exposeInMainWorld("scorelerDesktop", {
+ onPluginProgress:fn=>{const listener=(_event,value)=>fn(value);ipcRenderer.on('scoreler-plugin-progress',listener);return()=>ipcRenderer.removeListener('scoreler-plugin-progress',listener);},
  plugins:(action,value)=>{if(!['list','review','import','cancel','install','enable','uninstall','open','resize','close'].includes(action))return Promise.reject(Error('Invalid plugin action'));return ipcRenderer.invoke('scoreler-plugins',action,value);},
  network:(action,value)=>{if(!['state','save','test'].includes(action))return Promise.reject(Error('Invalid network action'));return ipcRenderer.invoke('scoreler-network',action,value);},
  chatgpt:(action,value)=>{if(!['state','signin','cancel','disconnect','models','select','usage','begin-user-turn','end-user-turn','chat-prompts','background-prompts'].includes(action))return Promise.reject(Error('Invalid ChatGPT action'));return ipcRenderer.invoke('scoreler-chatgpt',action,value);},
