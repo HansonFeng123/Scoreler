@@ -16,7 +16,8 @@ export function createChatGPTIntegration({app,safeStorage,shell,dialog,getWindow
  const consentFile=join(app.getPath('userData'),'chatgpt','consent.json');let consent={};try{consent=JSON.parse(readFileSync(consentFile,'utf8'));}catch{}
  const saveConsent=()=>{mkdirSync(join(app.getPath('userData'),'chatgpt'),{recursive:true});writeFileSync(consentFile,JSON.stringify(consent));};
  const validTurn=id=>typeof id==='string'&&/^[a-zA-Z0-9-]{16,80}$/.test(id);
- const state=async()=>{const session=await client.getSession();return {session,models:catalog,selected,effort,encryptionAvailable:available(),askBeforeUserChat:!(session.sharing&&consent.skipProfile&&session.profileId===consent.skipProfile)};};
+ const backgroundNotice='Authorize Scoreler background study requests for this connected account, including dictation generation/correction and study automations you enable. Scoreler may send instructions, relevant conversation/memory, attached study content and local tool results to OpenAI when you are not interacting with the chat. Subscription limits apply. This does not authorize other users, other apps or a general API proxy. You can restore confirmation in Settings or revoke access by disconnecting.';
+ const state=async()=>{const session=await client.getSession();return {session,models:catalog,selected,effort,encryptionAvailable:available(),askBeforeUserChat:!(session.sharing&&consent.skipProfile&&session.profileId===consent.skipProfile),askBeforeBackground:!(session.sharing&&consent.backgroundProfile&&session.profileId===consent.backgroundProfile)};};
  const discover=async()=>{catalog=await client.listModels();if(!catalog.some(m=>m.slug===selected)){selected='';effort='';}return state();};
  async function action(action,value){
   if(action==='state'){const current=await state();if(current.session.sharing&&!catalog.length)try{return await discover();}catch{}return current;}
@@ -26,7 +27,8 @@ export function createChatGPTIntegration({app,safeStorage,shell,dialog,getWindow
    if(current.sharing&&current.profileId){if(userTurns.has(value.requestId))throw Error('Chat turn already started');if(userTurns.size>=64)throw Error('Too many active chat turns');userTurns.set(value.requestId,{profile:current.profileId,model:selected,expires:Date.now()+30*60_000,allowed:false});}return {started:true};
   }
   if(action==='end-user-turn'){if(validTurn(value?.requestId))userTurns.delete(value.requestId);return {ended:true};}
-  if(action==='chat-prompts'){if(typeof value?.ask!=='boolean')throw Error('Invalid chat preference');const current=await client.getSession();if(!value.ask&&!current.sharing)throw Error('Connect ChatGPT first');consent=value.ask?{}:{skipProfile:current.profileId};saveConsent();return state();}
+  if(action==='chat-prompts'){if(typeof value?.ask!=='boolean')throw Error('Invalid chat preference');const current=await client.getSession();if(!value.ask&&!current.sharing)throw Error('Connect ChatGPT first');if(value.ask)delete consent.skipProfile;else consent={...consent,skipProfile:current.profileId};saveConsent();return state();}
+  if(action==='background-prompts'){if(typeof value?.ask!=='boolean')throw Error('Invalid background preference');const current=await client.getSession();if(value.ask){delete consent.backgroundProfile;saveConsent();}else{if(!current.sharing||!current.profileId)throw Error('Connect ChatGPT first');const result=await dialog.showMessageBox(getWindow(),{type:'question',title:'Scoreler · Background permission',message:'Remember permission for Scoreler background study requests?',detail:backgroundNotice,buttons:['Cancel','Authorize background study use'],defaultId:0,cancelId:0,noLink:true});if(result.response===1){consent={...consent,backgroundProfile:current.profileId};saveConsent();}}return state();}
   if(action==='cancel'){client.cancelSignIn();return state();}
   if(action==='usage'){await shell.openExternal(CHATGPT_USAGE_URL);return state();}
   if(action==='disconnect'){userTurns.clear();consent={};saveConsent();for(const c of requests.values())c.abort();catalog=[];selected='';effort='';persist();try{await client.disconnect();}finally{catalog=[];}return state();}
@@ -37,7 +39,7 @@ export function createChatGPTIntegration({app,safeStorage,shell,dialog,getWindow
    const session=await client.getSession();if(session.sharing){
     await discover();
     if(session.profileId&&!welcomed.has(session.profileId)){
-     await dialog.showMessageBox(getWindow(),{type:'info',title:'Scoreler · ChatGPT',message:'You are using your ChatGPT plan',detail:'Eligible Scoreler requests use your ChatGPT plan and its limits. Manage app usage and access in ChatGPT Settings. Sending a chat message authorizes its response and tool follow-ups. You can remember chat permission; background activity asks separately.',buttons:['Got it'],noLink:true});
+     await dialog.showMessageBox(getWindow(),{type:'info',title:'Scoreler · ChatGPT',message:'You are using your ChatGPT plan',detail:'Eligible Scoreler requests use your ChatGPT plan and its limits. Manage app usage and access in ChatGPT Settings. Sending a chat message authorizes its response and tool follow-ups. You can remember chat permission; background permission is separate and can be remembered explicitly.',buttons:['Got it'],noLink:true});
      welcomed.add(session.profileId);persist();
     }
    }return state();
@@ -52,7 +54,7 @@ export function createChatGPTIntegration({app,safeStorage,shell,dialog,getWindow
   throw Error('Unsupported ChatGPT action');
  }
  // User chat grants are registered by the trusted main-window IPC and expire
- // when that turn ends. Background requests never reuse saved chat permission.
+ // when that turn ends. Background requests use only a separate express background grant.
  function attach(child){child.on('message',async message=>{
   if(!message||message.type!=='scoreler-chatgpt-request'||typeof message.id!=='string')return;
   const {id}=message;
@@ -69,11 +71,11 @@ export function createChatGPTIntegration({app,safeStorage,shell,dialog,getWindow
    if(Array.isArray(payload.input)&&payload.input.some(item=>Array.isArray(item.content)&&item.content.some(part=>part.type==='input_image'))&&!model.inputModalities?.includes('image'))throw Error('This model does not advertise image input. Choose an image-capable model.');
    if(effort&&!model.reasoningLevels?.includes(effort))throw Error('This reasoning level is no longer available.');
    const candidate=userTurns.get(payload.userTurnId),turn=candidate&&candidate.expires>Date.now()&&candidate.profile===currentSession.profileId&&candidate.model===selected?candidate:undefined;
-   const remembered=turn&&consent.skipProfile===currentSession.profileId;
+   const remembered=!!currentSession.profileId&&(turn?consent.skipProfile===currentSession.profileId:consent.backgroundProfile===currentSession.profileId);
    if(!turn?.allowed&&!remembered){
-    const result=await dialog.showMessageBox(getWindow(),{type:'question',title:'Scoreler · ChatGPT plan',message:turn?'Allow this chat turn to use your ChatGPT plan?':'Allow this background request to use your ChatGPT plan?',detail:'Scoreler sends your instructions, relevant conversation, attached study content and local tool results to OpenAI. Subscription limits apply. '+(turn?'This covers the response and tool follow-ups for the message you sent. Background activity asks separately.':'This request has no active user-chat authorization. Saved chat permission does not authorize background activity.'),buttons:['Cancel','Allow this request'],defaultId:0,cancelId:0,noLink:true,...(turn?{checkboxLabel:"Don't ask again for messages I send",checkboxChecked:false}:{})});
+    const result=await dialog.showMessageBox(getWindow(),{type:'question',title:'Scoreler · ChatGPT plan',message:turn?'Allow this chat turn to use your ChatGPT plan?':'Allow this background request to use your ChatGPT plan?',detail:'Scoreler sends your instructions, relevant conversation, attached study content and local tool results to OpenAI. Subscription limits apply. '+(turn?'This covers the response and tool follow-ups for the message you sent. Background activity asks separately.':backgroundNotice),buttons:['Cancel','Allow this request'],defaultId:0,cancelId:0,noLink:true,checkboxLabel:turn?"Don't ask again for messages I send":"Don't ask again for Scoreler background study requests",checkboxChecked:false});
     if(result.response!==1)throw Error('ChatGPT request cancelled. Nothing was sent for inference.');
-    if(turn&&result.checkboxChecked){consent={skipProfile:currentSession.profileId};saveConsent();}
+    if(result.checkboxChecked&&currentSession.profileId){consent={...consent,...(turn?{skipProfile:currentSession.profileId}:{backgroundProfile:currentSession.profileId})};saveConsent();}
    }
    if(turn){if(userTurns.get(payload.userTurnId)!==turn)throw Error('ChatGPT request cancelled. This chat turn ended.');turn.allowed=true;}
    controller.signal.throwIfAborted();
