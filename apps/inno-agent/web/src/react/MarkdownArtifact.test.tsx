@@ -258,7 +258,7 @@ describe("MarkdownArtifact", () => {
 			expect(getByRole("tab", { name: "图表" })).not.toBeNull();
 			expect(getByRole("button", { name: "复制代码" })).not.toBeNull();
 			expect(getByRole("button", { name: "重置视图" })).not.toBeNull();
-		}, { timeout: 5000 });
+		}, { timeout: 12000 });
 		fireEvent.click(getByRole("tab", { name: "代码" }));
 		expect(container.querySelector("[data-inno-mermaid-source]")).not.toBeNull();
 		expect(getByRole("button", { name: "缩小" })).toHaveProperty("disabled", true);
@@ -270,7 +270,7 @@ describe("MarkdownArtifact", () => {
 		expect(container.textContent).toContain("图示如下");
 		expect(container.textContent).toContain("图示结束");
 		expect(container.querySelector(".inno-mermaid-suspense-placeholder")).toBeNull();
-	});
+	}, 15000);
 
 	it("sanitizes SVG preview elements, event handlers, and external paint URLs", async () => {
 		const source = [

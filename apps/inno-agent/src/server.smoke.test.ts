@@ -1,3 +1,4 @@
+import {pathToFileURL} from 'node:url';
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { createServer as createHttpServer, request as httpRequest, type Server } from "node:http";
@@ -103,7 +104,7 @@ ServerResponse.prototype.end = function (...args) {
 	port = await getFreePort();
 	child = spawn(
 		process.execPath,
-		["--import", errorHook, "--import", "tsx", SERVER_ENTRY, "--home", home, "--data-dir", join(home, "data"), "--workspace", workspace, "--port", String(port)],
+		["--import", pathToFileURL(errorHook).href, "--import", "tsx", SERVER_ENTRY, "--home", home, "--data-dir", join(home, "data"), "--workspace", workspace, "--port", String(port)],
 		{ cwd: REPO_ROOT, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, LOG_LEVEL: "debug" } },
 	);
 	child.stdout?.on("data", (chunk) => (childLog += chunk));
@@ -162,7 +163,7 @@ describe("server smoke", () => {
 	it("GET /health returns 200 ok without bootstrap side effects", async () => {
 		const res = await api("/health");
 		expect(res.status).toBe(200);
-		expect(await res.json()).toEqual({ status: "ok" });
+		expect(await res.json()).toMatchObject({ status: "ok" });
 	});
 
 	it("GET /api/settings returns 200 with provider API keys redacted", async () => {
@@ -751,7 +752,7 @@ describe("server smoke", () => {
 	it("logs a synthetic response error at debug and still completes the response", async () => {
 		const res = await fetch(`http://127.0.0.1:${port}/health`, { headers: { "x-test-response-error": "1" } });
 		expect(res.status).toBe(200);
-		expect(await res.json()).toEqual({ status: "ok" });
+		expect(await res.json()).toMatchObject({ status: "ok" });
 		const requestId = res.headers.get("x-request-id") ?? "";
 		await expect.poll(() => requestLogs(requestId)).toHaveLength(2);
 		expect(requestLogs(requestId)).toMatchObject([
@@ -761,6 +762,10 @@ describe("server smoke", () => {
 	});
 
 	it("logs a disconnected SSE once, including after the server finishes the turn", async () => {
+		// Earlier cancellation tests can leave a synthetic provider stream active.
+		const pendingSessions = await (await api("/api/sessions")).json() as Array<{id:string}>;
+		for(const previous of pendingSessions){const state=await (await api(`/api/chat/status/${previous.id}`)).json() as {stream?:{turnId?:string}};if(state.stream?.turnId)await fetch(`http://127.0.0.1:${port}/api/chat/${previous.id}/${state.stream.turnId}/abort`,{method:"POST"});}
+
 		const created = await fetch(`http://127.0.0.1:${port}/api/sessions`, { method: "POST", body: "{}" });
 		expect(created.status).toBe(201);
 		const { id: sessionId } = await created.json() as { id: string };

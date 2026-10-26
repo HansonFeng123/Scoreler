@@ -9,11 +9,11 @@ it('expands upward with the drag handle, bounds its height, and resets',()=>{
   const handle=screen.getByRole('button',{name:'Drag to resize message box'});
   Object.assign(handle,{setPointerCapture:vi.fn(),hasPointerCapture:()=>true,releasePointerCapture:vi.fn()});
   fireEvent.pointerDown(handle,{button:0,clientY:500});fireEvent.pointerMove(handle,{clientY:300});
-  expect((screen.getByRole('textbox') as HTMLTextAreaElement).style.height).toBe('278px');
+  expect((screen.getByRole('textbox') as HTMLTextAreaElement).style.height).toBe('264px');
   fireEvent.pointerUp(handle);fireEvent.pointerMove(handle,{clientY:100});
-  expect((screen.getByRole('textbox') as HTMLTextAreaElement).style.height).toBe('278px');
-  fireEvent.doubleClick(handle);expect((screen.getByRole('textbox') as HTMLTextAreaElement).style.height).toBe('78px');
+  expect((screen.getByRole('textbox') as HTMLTextAreaElement).style.height).toBe('264px');
+  fireEvent.doubleClick(handle);expect((screen.getByRole('textbox') as HTMLTextAreaElement).style.height).toBe('64px');
   expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('My draft');
   vi.unstubAllGlobals();
 });
-it('supports keyboard resizing without submitting the message',()=>{render(<ResizableChatInput locale="zh-CN"/>);const h=screen.getByRole('button');fireEvent.keyDown(h,{key:'ArrowUp'});expect((screen.getByRole('textbox') as HTMLTextAreaElement).style.height).toBe('102px');fireEvent.keyDown(h,{key:'Home'});expect((screen.getByRole('textbox') as HTMLTextAreaElement).style.height).toBe('78px');});
+it('supports keyboard resizing without submitting the message',()=>{render(<ResizableChatInput locale="zh-CN"/>);const h=screen.getByRole('button');fireEvent.keyDown(h,{key:'ArrowUp'});expect((screen.getByRole('textbox') as HTMLTextAreaElement).style.height).toBe('88px');fireEvent.keyDown(h,{key:'Home'});expect((screen.getByRole('textbox') as HTMLTextAreaElement).style.height).toBe('64px');});

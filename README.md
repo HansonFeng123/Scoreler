@@ -54,6 +54,10 @@ The screenshots below use an isolated demonstration profile.
 
 ![Dictation practice](docs/images/en/dictation.png)
 
+### Toolbox plugins
+
+![Toolbox plugins](docs/images/en/plugins.png)
+
 ## Features
 
 - **Planning:** calendar events, classes, homework and exam deadlines; task completion; upcoming reminders; elapsed classes hidden from the daily view.
@@ -70,7 +74,7 @@ The screenshots below use an isolated demonstration profile.
 - **Appearance:** light/dark modes, four default palettes, and saved custom themes with an RGB background color or local picture and a chosen accent color. The loading screen and running app icon follow your saved appearance. Windows may cache pinned shortcut icons. Drag functions to reorder them or move them between the sidebar and toolbox; a collapsed sidebar keeps its icons accessible.
 - **Conversation management:** right-click a recent conversation to delete it after confirmation. Saved study materials, notes and videos remain.
 - **Countdown reminders:** the desktop app schedules a system notification when the timer finishes, including while another page is open or the renderer is busy. Windows notification settings apply; the application must remain running.
-- **Dictation practice:** Create saved exercises from word-definition pairs in chat images, files or text. Open them from a chat shortcut or the toolbox, type answers, and submit for AI marking against the supplied meaning. Equivalent synonyms are accepted; incomplete definitions may be rejected. Draft answers are saved locally. Supports PDF/PNG/DOCX export. Exported sheets omit answers unless explicitly selected. Uses the configured default model; generated content and marking need review.
+- **Dictation practice:** Create saved exercises from word-definition pairs in chat images, files or text. Open them from a chat shortcut or the toolbox, type answers, and submit for AI marking against the supplied meaning. Equivalent synonyms are accepted; incomplete definitions may be rejected. Subject folders and exercise cards organize the library. Draft answers and every submitted attempt are saved locally; earlier attempts open read-only. Deletion requires confirmation and removes only the selected exercise and its attempts. Supports PDF/PNG/DOCX export. Exported sheets omit answers unless explicitly selected. Uses the configured default model; generated content and marking need review.
 - **Toolbox:** startup guide, countdown timer, stopwatch, choice wheel, random numbers and Markdown-to-PDF export. Clock state survives navigation; countdown completion produces an in-app reminder.
 - **Source updates:** check the configured source branch and explicitly apply a reviewed fast-forward update while the app is closed.
 
@@ -138,6 +142,36 @@ Enable IMAP with your email provider and obtain an app password or client author
 ### Embedded browser
 
 Enable the browser in Settings and enter your own HTTPS website addresses. Log in through the website, including any required multi-factor authentication. Saved sessions remain on this device. Website restrictions can prevent embedded login; the system-browser option remains useful for those sites.
+
+### ChatGPT plan sign-in
+
+Scoreler implements the published [OpenAI OAuth flow](https://developers.openai.com/siwc/token-sharing-open-source/sign-in) and [Responses interface](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference), subject to the [official terms](https://openai.com/policies/sign-in-with-chatgpt-terms/). The integration is Scoreler-owned code in packages/scoreler-chatgpt and calls the unmodified official OpenAI SDK through its public API. No Sign in with ChatGPT DevKit code is included or modified. Scoreler is a free, noncommercial, locally running open-source project. No OpenAI endorsement is claimed.
+
+In desktop Settings, near Providers and models, read the privacy notice, explicitly enable plan-use authorization, then choose Continue with ChatGPT. Complete authorization yourself in the official browser page. No password, cookie, session token or another app's credentials should be pasted into Scoreler. Only eligible accounts, plans, workspaces and supported regions can use this feature; do not bypass eligibility or limits. Existing API-key providers remain available separately.
+
+Refresh the account-specific model catalog and choose a model. Reasoning choices appear only when the catalog explicitly advertises them; otherwise the model default is used. The composer also offers model and supported reasoning selection. The official DeepSeek API exposes Off, Low, High and Max for deepseek-flash and deepseek-v4-pro. Reasoning changes give the mascot a different expression while preserving theme colors.
+
+Sign-in and OS-protected encrypted credentials remain in Electron's main process. There is no plaintext fallback or local HTTP API proxy. A native dialog initially confirms each user chat turn, covering its response and tool follow-ups. Its optional “Don’t ask again for messages I send” choice is remembered locally for that connected account; Settings can restore confirmation. Only an active turn registered by the desktop chat UI can use that choice. Background study use requires its own express consent. Its native prompt offers a separate remember-permission checkbox for dictation generation/correction and study automations you enable; Settings can restore that prompt. This grant is bound to the connected account, persists locally and is cleared on disconnect. Saved chat permission alone never grants background access. Declining sends no inference content. Requests use the fixed official Responses endpoint with store:false and stream:true. Relevant instructions, conversation history, selected study memory/material excerpts, supported pictures and local function results are sent to OpenAI. Signing in does not import ChatGPT conversations. Credentials are never sent to the renderer or backend child. Local encrypted storage persists across restart; disconnect removes tokens and attempts revocation. If revocation fails, manage access in ChatGPT settings.
+
+Subscription and app limits apply; this supplies neither unlimited usage nor general API credits. Manage usage/access at https://chatgpt.com/settings/usage. Unsupported account/model capabilities produce an error; hosted file search, image generation, Code Interpreter, hosted MCP, audio/video input and Files uploads are not offered through this flow. Documents use Scoreler's existing local extraction workflow. OS protection does not protect against malicious software already running as the user. Account suspension risk cannot be guaranteed away.
+
+Glass transparency now spans 0–90% and saves locally. The slider changes only the glass tint opacity; blur, brightness and contrast stay fixed across 0–90%. Inputs and modal dialogs stay solid; system reduced-transparency/high-contrast preferences take precedence.
+
+Verification: the user completed official browser authorization through the current adapter. Live checks passed for account-specific model discovery, a short study conversation, a synthetic picture, a local function call and its follow-up. The encrypted connection survived a separate process restart. A clean Windows 1.2.0 package launched and rendered Scoreler with isolated default settings. Automated checks also cover refresh, denial, quota errors, interrupted streams, storage, responsive controls and updater rollback. Simulated failures are not live-account tests, and these checks do not guarantee every account, model, Windows installation or external service will work.
+
+ChatGPT connection settings let you save a SOCKS5/HTTP/HTTPS proxy and independently enable or disable it without losing the address. When disabled, choose system settings or direct access. The setting covers ChatGPT sign-in, account models and study inference only; external browser authorization uses browser settings, and other API providers keep their existing routing. Test connection checks public OpenAI configuration without credentials and does not authorize an account. Proxy credentials are not supported; the saved address stays in the local desktop profile and is excluded from study exports.
+
+Terms review (2026-10-26): the modified DevKit draft was removed from the distribution. Scoreler's own protocol adapter now calls the documented service interfaces and unchanged official OpenAI SDK. Authorization, local encryption, consent, application-only use, subscription limits and disconnect behavior are covered by implementation checks and synthetic tests. This is not OpenAI approval or an account-suspension guarantee. Live verification is tracked separately from simulated failure, refresh and quota tests.
+
+Release regression checks also exercise the actual frontend, preload bridge, backend and main-process flow with a synthetic model: study instructions and 42 tools are advertised, a real local note is created, and its result returns to the follow-up request. These synthetic checks make no OpenAI requests. Provider-selection tests retain configured API models alongside ChatGPT.
+
+### Toolbox plugins
+
+Open Toolbox → Plugins and search the catalog bundled with the app. Review author, source, version, compatibility, permissions and checksum before installing. A checksum proves integrity, not safety. Local ZIP import is also available. Installed tools can be opened, disabled, uninstalled or updated from approved catalog sources. A failed update preserves the previous version.
+
+This initial version supports offline, no-permission tools in separate windows. It provides no study-record, provider-key, Node, Electron or network API. Tool state is in memory and disappears when its window closes. The browser sandbox is not an OS container; browser flaws and resource exhaustion remain possible. Plugins cannot change the catalog. See [plugin format](docs/plugins.md).
+
+The [graphing calculator plugin](https://github.com/HansonFeng123/scoreler-graphing-calculator) is based on Equation.io by Anthony Foster (MIT), with its full license and visible credit. It offers multiple expressions, sliders, implicit equations, inequalities, piecewise functions, parametric curves, derivatives and regression examples using Equation.io syntax. Exact Desmos compatibility is not promised. Cloud saving, file import/export, clipboard integration and background-worker solvers are unavailable; closing the window discards graph state. Downloads follow the proxy switch in App updates; proxy downloads require system curl. The proxy address is never passed to plugins.
 
 ## Data, backups and privacy
 
@@ -211,88 +245,34 @@ The installed updater downloads public GitHub source without sign-in. Private re
 
 ## Update log
 
-### 1.1.2
+### 1.3
 
-- Keep the app, desktop pet, taskbar and Start shortcut colors aligned with the selected preset or custom theme. Give each generated icon a content-specific filename to avoid stale Windows icon caches.
-- Add a saved liquid-glass transparency slider with live preview, from solid to 35% transparency. Keep form controls solid and preserve the selected background and theme.
+See [verification results and known limitations](docs/verification-1.3.md) for the release test scope.
 
-### 1.1.1
+- Add Notes-style dictation subject folders/cards, preserved drafts and submitted answer history, read-only review and confirmed deletion.
+- Add a separate, account-bound remembered permission for background ChatGPT study requests, revocable in Settings.
 
-- Fix reopening source updates through a Windows shortcut that omits the application folder. Install a runtime bootstrap and a separate executable with Scoreler's Windows identity and mascot icon; older updaters are repaired when the candidate first starts.
-- Keep the same profile and automatic activation backup. A shortcut to an older runtime resolves the currently selected update.
-- Use blurred, translucent sidebar and widget materials, with solid controls and a readable modal surface. Respect reduced-transparency and increased-contrast preferences.
-- Fix the recent-chat delete dialog's low-contrast label and oversized buttons. Validate custom accent labels and glass text against bright and dark background extremes.
-- Prevent isolated smoke tests from registering their temporary executable as a desktop notification shortcut.
+- Add the plugin catalog inside Toolbox, package/source/permission review, local ZIP import, installation, disabling, uninstalling and catalog-approved updates.
+- Run tools in isolated windows with no network, credentials or study-data access by default.
+- Add the graphing calculator example plugin; verified real GitHub downloads, 1.0-to-1.1 updates, failed-update preservation and plotting.
+- Show patch details only for the newest minor line; summarize older minor releases.
 
-### 1.1.0
+### 1.2
 
-- Save custom background pictures, RGB colors and accent colors locally while retaining the four default themes.
-- Match the loading screen and running app icon to the saved theme.
-- Deliver countdown completion through desktop system notifications.
-- Add confirmed deletion from the recent-conversation context menu without deleting saved study materials.
-- Fix the startup guide's AI Agent shortcut so it opens the study assistant.
-- Remove the build computer's working-directory value from generated video bundles.
-- Version 1.1.0 used user-configured API providers. Optional official ChatGPT plan access was added in 1.2.0; see the setup and limitations below.
+- Add optional ChatGPT plan sign-in, supported model/reasoning selection and retained API providers.
+- Add saved proxy options, update download progress and failure recovery; improve glass transparency and the composer.
 
-### 1.0.0
+### 1.1
 
-- Show a new-version label only when an update is actually available.
-- Support public GitHub update downloads without requiring GitHub sign-in.
-- Retain stage progress, automatic activation backups, saved layouts and source-based vocabulary dictation.
+- Add custom backgrounds/themes, glass materials and theme-aware mascot/Windows icons; repair update startup and conversation deletion.
 
-### 0.8.6
+### 1.0
 
-- Fix the backend build failure caused by a test importing frontend JSX.
-- Restore active update status when returning to Settings, display completed preparation stages in a progress bar, and show stopped preparation clearly.
+- Improve the study assistant, calendar, materials, notes, practice, video and local-data workflows.
 
-### 0.8.5
+### 0.8
 
-- Drag functions to reorder the sidebar and toolbox, or move them between both areas; save the layout locally.
-- Create vocabulary dictation from word-definition pairs supplied through chat images, documents or text; open saved exercises directly from chat.
-- Grade against supplied definitions, accepting equivalent synonyms while requiring essential meaning; save answer drafts and export with or without answers.
-- Set the Windows window icon and relaunch identity to Scoreler.
-
-### 0.8.4
-
-- Prevent long Markdown tables from overlapping subsequent paragraphs in the preview and export.
-
-- Keep section icons selectable in a narrow rail when the sidebar is collapsed.
-
-- Align the automatic-update checkbox with other Settings options.
-- Separate background preparation from restart; show preparation stages and detect stopped workers.
-- Reuse unchanged locked dependencies, retain the same profile across restart, and back up before activation.
-
-### 0.8.3
-
-- Add saved dictation worksheets with AI generation, answer submission, corrections and export.
-- Keep answer keys out of worksheet exports unless selected.
-
-### 0.8.2
-
-- Route remembered homework and other actionable tasks to the calendar.
-- Move memory capsules into the toolbox.
-- Keep automatic-update controls aligned and reuse a compatible installed Electron runtime during updates.
-- Add separate English and Chinese documentation screenshots.
-
-- Add a themed calculator to the toolbox, with keyboard entry, parentheses, percentages and input validation.
-- Move memory capsules into the toolbox without changing saved memories.
-- Show the running version and source commit in Settings.
-- Use authenticated GitHub API downloads for installed-app source updates.
-- Isolate update builds by commit before switching the installed launcher's ready version.
-- Handle closed logging pipes during detached launches.
-- Add optional background update preparation and next-restart activation with automatic local profile backups.
-- Expand setup and daily-use documentation and add clean-profile screenshots.
-
-### 0.8.1
-
-- Add installed Windows update checks and a detached build-and-restart workflow.
-- Preserve the existing data profile when switching to an updated runtime.
-- Declare the notes graphics dependency explicitly so installed builds can find it.
-
-### 0.8.0
-
-- Initial source edition with planning, AI study tools, materials, notes, practice tests, mistakes, memories, email, optional browser, companion, themes and toolbox.
-- Add guarded Git source updates with reviewed-commit checks and source rollback on build failure.
+- Establish the desktop app, bilingual UI, study planning and local materials foundation.
 
 ## Troubleshooting
 
@@ -309,39 +289,3 @@ The installed updater downloads public GitHub source without sign-in. Private re
 Scoreler builds on [Inno Agent](https://github.com/hhyqhh/inno-agent), [Pi](https://github.com/earendil-works/pi), [Remotion](https://www.remotion.dev/), [Electron](https://www.electronjs.org/), [React](https://react.dev/), and [Lucide](https://lucide.dev/), together with the dependencies inventoried in [DEPENDENCIES.json](DEPENDENCIES.json).
 
 Scoreler's own source license is in [LICENSE](LICENSE). Dependency licenses remain separate. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and the full texts in `third-party-licenses`. Publishing source that references Remotion is distinct from distributing an installer containing Remotion, FFmpeg and other binaries. Review the relevant terms and corresponding-source requirements before binary distribution. The inventory and checks are not universal legal clearance.
-
-## 1.2.2
-
-- Fix transparency: only glass tint opacity changes from 0–90%; blur, brightness and contrast stay fixed. The input area keeps its existing size.
-- Move ChatGPT plan/usage information beside the reasoning selector and remove its extra row. Remove the extra solid rectangle around the home-page Ask Scoreler panel.
-- Restore the recent-conversation context menu over glass. Deletion still requires confirmation and preserves saved notes/materials.
-- Add an independent **Use saved proxy for GitHub updates** option in App updates. It uses the address saved under ChatGPT connection, independently of that connection's enable switch. It applies to GitHub version checks and source downloads; npm dependencies continue to use npm's network settings. SOCKS5, HTTP and HTTPS addresses without credentials are supported; the proxy option requires curl on the system (included with supported Windows versions).
-- Stream update downloads with byte progress, retry incomplete transfers, and allow up to 15 minutes per archive attempt. Preparation and activation still preserve the old version and back up the profile.
-
-## 1.2.1
-
-- Preserve the original 0–35% glass appearance. Above 35%, continuously adjust the panel material instead of adding opaque strips behind text.
-- Compact the chat composer, align attachment/model/reasoning/send controls, and keep usage details secondary.
-- Check real desktop chat/tool flow and composer layout at three window widths before publication.
-
-## 1.2.0: ChatGPT plan sign-in and reasoning controls
-
-Scoreler implements the published [OpenAI OAuth flow](https://developers.openai.com/siwc/token-sharing-open-source/sign-in) and [Responses interface](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference), subject to the [official terms](https://openai.com/policies/sign-in-with-chatgpt-terms/). The integration is Scoreler-owned code in packages/scoreler-chatgpt and calls the unmodified official OpenAI SDK through its public API. No Sign in with ChatGPT DevKit code is included or modified. Scoreler is a free, noncommercial, locally running open-source project. No OpenAI endorsement is claimed.
-
-In desktop Settings, near Providers and models, read the privacy notice, explicitly enable plan-use authorization, then choose Continue with ChatGPT. Complete authorization yourself in the official browser page. No password, cookie, session token or another app's credentials should be pasted into Scoreler. Only eligible accounts, plans, workspaces and supported regions can use this feature; do not bypass eligibility or limits. Existing API-key providers remain available separately.
-
-Refresh the account-specific model catalog and choose a model. Reasoning choices appear only when the catalog explicitly advertises them; otherwise the model default is used. The composer also offers model and supported reasoning selection. The official DeepSeek API exposes Off, Low, High and Max for deepseek-flash and deepseek-v4-pro. Reasoning changes give the mascot a different expression while preserving theme colors.
-
-Sign-in and OS-protected encrypted credentials remain in Electron's main process. There is no plaintext fallback or local HTTP API proxy. A native dialog initially confirms each user chat turn, covering its response and tool follow-ups. Its optional “Don’t ask again for messages I send” choice is remembered locally for that connected account; Settings can restore confirmation. Only an active turn registered by the desktop chat UI can use that choice. Background requests always require separate express confirmation. Declining sends no inference content. Requests use the fixed official Responses endpoint with store:false and stream:true. Relevant instructions, conversation history, selected study memory/material excerpts, supported pictures and local function results are sent to OpenAI. Signing in does not import ChatGPT conversations. Credentials are never sent to the renderer or backend child. Local encrypted storage persists across restart; disconnect removes tokens and attempts revocation. If revocation fails, manage access in ChatGPT settings.
-
-Subscription and app limits apply; this supplies neither unlimited usage nor general API credits. Manage usage/access at https://chatgpt.com/settings/usage. Unsupported account/model capabilities produce an error; hosted file search, image generation, Code Interpreter, hosted MCP, audio/video input and Files uploads are not offered through this flow. Documents use Scoreler's existing local extraction workflow. OS protection does not protect against malicious software already running as the user. Account suspension risk cannot be guaranteed away.
-
-Glass transparency now spans 0–90% and saves locally. The slider changes only the glass tint opacity; blur, brightness and contrast stay fixed across 0–90%. Inputs and modal dialogs stay solid; system reduced-transparency/high-contrast preferences take precedence.
-
-Verification: the user completed official browser authorization through the current adapter. Live checks passed for account-specific model discovery, a short study conversation, a synthetic picture, a local function call and its follow-up. The encrypted connection survived a separate process restart. A clean Windows 1.2.0 package launched and rendered Scoreler with isolated default settings. Automated checks also cover refresh, denial, quota errors, interrupted streams, storage, responsive controls and updater rollback. Simulated failures are not live-account tests, and these checks do not guarantee every account, model, Windows installation or external service will work.
-
-ChatGPT connection settings let you save a SOCKS5/HTTP/HTTPS proxy and independently enable or disable it without losing the address. When disabled, choose system settings or direct access. The setting covers ChatGPT sign-in, account models and study inference only; external browser authorization uses browser settings, and other API providers keep their existing routing. Test connection checks public OpenAI configuration without credentials and does not authorize an account. Proxy credentials are not supported; the saved address stays in the local desktop profile and is excluded from study exports.
-
-Terms review (2026-10-25): the modified DevKit draft was removed from the distribution. Scoreler's own protocol adapter now calls the documented service interfaces and unchanged official OpenAI SDK. Authorization, local encryption, consent, application-only use, subscription limits and disconnect behavior are covered by implementation checks and synthetic tests. This is not OpenAI approval or an account-suspension guarantee. Live verification is tracked separately from simulated failure, refresh and quota tests.
-
-Release regression checks also exercise the actual frontend, preload bridge, backend and main-process flow with a synthetic model: study instructions and 42 tools are advertised, a real local note is created, and its result returns to the follow-up request. These synthetic checks make no OpenAI requests. Provider-selection tests retain configured API models alongside ChatGPT.
