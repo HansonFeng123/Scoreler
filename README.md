@@ -169,9 +169,9 @@ Release regression checks also exercise the actual frontend, preload bridge, bac
 
 Open Toolbox → Plugins and search the catalog bundled with the app. Review author, source, version, compatibility, permissions and checksum before installing. A checksum proves integrity, not safety. Local ZIP import is also available. Installed tools can be opened, disabled, uninstalled or updated from approved catalog sources. A failed update preserves the previous version.
 
-This initial version supports offline, no-permission tools in separate windows. It provides no study-record, provider-key, Node, Electron or network API. Tool state is in memory and disappears when its window closes. The browser sandbox is not an OS container; browser flaws and resource exhaustion remain possible. Plugins cannot change the catalog. See [plugin format](docs/plugins.md).
+Installed, enabled plugins appear directly in Toolbox. Open a card to run the offline, no-permission tool inside the Scoreler window in an isolated view; use All tools to return. It provides no study-record, provider-key, Node, Electron or network API. Tool state is in memory and disappears when you leave its view. The browser sandbox is not an OS container; browser flaws and resource exhaustion remain possible. Plugins cannot change the catalog. See [plugin format](docs/plugins.md).
 
-The [graphing calculator plugin](https://github.com/HansonFeng123/scoreler-graphing-calculator) is based on Equation.io by Anthony Foster (MIT), with its full license and visible credit. It offers multiple expressions, sliders, implicit equations, inequalities, piecewise functions, parametric curves, derivatives and regression examples using Equation.io syntax. Exact Desmos compatibility is not promised. Cloud saving, file import/export, clipboard integration and background-worker solvers are unavailable; closing the window discards graph state. Downloads follow the proxy switch in App updates; proxy downloads require system curl. The proxy address is never passed to plugins.
+The [graphing calculator plugin](https://github.com/HansonFeng123/scoreler-graphing-calculator) is based on Equation.io by Anthony Foster (MIT), with its full license and visible credit. It offers multiple expressions, sliders, implicit equations, inequalities, piecewise functions, parametric curves, derivatives and regression examples using Equation.io syntax. Exact Desmos compatibility is not promised. Cloud saving, file import/export, clipboard integration and background-worker solvers are unavailable; leaving the tool discards graph state. Downloads follow the proxy switch in App updates; proxy downloads require system curl. The proxy address is never passed to plugins.
 
 ## Data, backups and privacy
 
@@ -244,6 +244,13 @@ The calculator supports arithmetic precedence, parentheses, unary signs, percent
 The installed updater downloads public GitHub source without sign-in. Private repositories use Git Credential Manager for authentication locally; credentials are not saved in the source snapshot or passed as command-line arguments. Enable Automatically prepare updates in Settings to check at startup and every six hours, build new source in the background, and activate it at the next restart. Automatic preparation is off initially. Each update builds in its own version directory. Before activation on restart, Scoreler automatically backs up the existing local profile, then switches the ready marker. If the backup fails, it keeps the previous version. The ready marker changes only after a successful build, so a failed build leaves the previous ready version selected. The installed launcher opens that ready version on subsequent launches. Your study database and configuration remain outside those source directories. Node.js, npm and Git must already be installed; private-repository users need their own authorized GitHub access.
 
 ## Update log
+
+### 1.3.1
+
+- Show installed plugins directly in Toolbox and open them inside the Scoreler window with the same offline sandbox restrictions.
+- Align dictation subject controls and add a glass surface behind subject-folder navigation.
+- Add optional grading instructions beside the correction button; retain those instructions with each submitted attempt and show them in history.
+- Build, 18 focused tests, real desktop dictation/plugin flow and embedded graph isolation checks passed. See [verification](docs/verification-1.3.1.md).
 
 ### 1.3
 

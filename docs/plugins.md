@@ -16,6 +16,8 @@ IDs and version strings are validated; unknown fields and any nonempty permissio
 
 ## Tool environment
 
+From Scoreler 1.3.1, enabled installed plugins have cards in Toolbox and open in a main-process-owned WebContentsView inside the main window. The plugin receives no host preload. Bounds follow the visible tool slot; leaving the tool, reloading, disabling or uninstalling closes its renderer. This does not change the v1 package format.
+
 The only host context is the immutable `window.ScorelerPlugin` object with `apiVersion: 1` and `locale: "en" | "zh-CN"`. No private data or credentials are included. There is no privileged preload, Node integration or plugin IPC. Each launch uses a fresh in-memory Electron session with a sandboxed renderer and restrictive CSP. Network requests, external navigation, new windows, downloads and permission grants are blocked. Tools must tolerate unavailable localStorage/IndexedDB and browser workers.
 
 This is a browser sandbox, not an operating-system container. A malicious tool could exhaust resources or exploit a browser flaw. Review the source and author before installation. No plugin safety certification is implied.
