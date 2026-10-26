@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "plugins": [
+    {
+      "id": "graphing-calculator",
+      "owner": "HansonFeng123",
+      "name": "Graphing calculator",
+      "description": "Offline multi-expression graphing with sliders, implicit equations, inequalities, parametric curves and calculus. Based on Equation.io (MIT).",
+      "subjects": [
+        "Mathematics",
+        "数学"
+      ],
+      "keywords": [
+        "graph",
+        "functions",
+        "calculus",
+        "plot",
+        "图像",
+        "函数",
+        "微积分"
+      ],
+      "scoreler": {
+        "min": "1.3.0",
+        "max": "1.99.99"
+      },
+      "permissions": [],
+      "repository": "https://github.com/HansonFeng123/scoreler-graphing-calculator",
+      "releases": [
+        {
+          "version": "1.0.0",
+          "tag": "v1.0.0",
+          "release": "https://github.com/HansonFeng123/scoreler-graphing-calculator/releases/tag/v1.0.0",
+          "download": "https://github.com/HansonFeng123/scoreler-graphing-calculator/releases/download/v1.0.0/graphing-calculator-1.0.0.zip",
+          "sha256": "06e965ee1af9a52533628cf297e2a7e8eab2c386fa5c684eee2403b2dadd9d77"
+        },
+        {
+          "version": "1.1.0",
+          "tag": "v1.1.0",
+          "release": "https://github.com/HansonFeng123/scoreler-graphing-calculator/releases/tag/v1.1.0",
+          "download": "https://github.com/HansonFeng123/scoreler-graphing-calculator/releases/download/v1.1.0/graphing-calculator-1.1.0.zip",
+          "sha256": "3c5c0ff548e6e0b677b5dbb45ecfbaf1523795391eafab28ac83739dc4a52685"
+        }
+      ]
+    }
+  ]
+}

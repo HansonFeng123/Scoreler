@@ -1,3 +1,5 @@
+import pluginNetworkTransport from './plugin-network.cjs';
+import {randomUUID} from 'node:crypto';
 import {createNetworkPreferences} from './network-preferences.js';
 import {createChatGPTIntegration} from './chatgpt.js';
 import appearanceHelper from './appearance.cjs';
@@ -9,12 +11,13 @@ import updateState from './update-state.cjs';
 // A detached launcher may close its output pipe while the app is running.
 for(const stream of [process.stdout,process.stderr])stream?.on('error',error=>{if(error.code!=='EPIPE')throw error;});
 import githubUpdates from './github-updates.cjs';
+import pluginsHost from './plugins.cjs';
 import distributionDefaults from './default-config.cjs';
 import {setupMail} from './mail-integration.js';
 import {setupStudyBrowser} from './study-browser.js';
 import { randomBytes } from 'node:crypto';
 import {createCompanion} from './companion.js';
-import { app, BrowserWindow, Tray, Menu, shell, dialog, clipboard, nativeImage, ipcMain, screen, Notification, safeStorage, net, session } from "electron";
+import { app, BrowserWindow, Tray, Menu, shell, dialog, clipboard, nativeImage, ipcMain, screen, Notification, safeStorage, net, session, protocol } from "electron";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { spawn, execFile, execFileSync } from "node:child_process";
 import { createServer as createNetServer } from "node:net";
@@ -29,6 +32,7 @@ if (process.env.SCORELER_SMOKE_DIR) {
 const explicitProfile=process.argv.find(arg=>arg.startsWith('--scoreler-profile='))?.slice('--scoreler-profile='.length);
 if(!process.env.SCORELER_SMOKE_DIR)app.setPath('userData',explicitProfile||join(app.getPath('appData'),'scoreler-desktop'));
 githubUpdates.setProfile(app.getPath('userData'));
+pluginsHost.registerScheme(protocol);
 const hasInstanceLock=app.requestSingleInstanceLock();
 if(!hasInstanceLock)app.exit(0);
 try{updateState.activatePending(app.getPath('userData'));}catch{dialog.showErrorBox('Scoreler update','The automatic backup failed. The previous version remains selected.');}
@@ -120,6 +124,10 @@ const network=createNetworkPreferences({app,session});
 ipcMain.handle('scoreler-network',async(event,action,value)=>{validateUpdateSender(event);if(event.senderFrame!==mainWindow.webContents.mainFrame)throw Error('Invalid network caller');try{return await network.action(action,value);}catch{throw Error('Could not apply proxy settings. Check the address and connection.');}});
 const chatgpt=createChatGPTIntegration({app,safeStorage,shell,dialog,getWindow:()=>mainWindow,fetch:network.fetch});
 ipcMain.handle('scoreler-chatgpt',async(event,action,value)=>{validateUpdateSender(event);if(event.senderFrame!==mainWindow.webContents.mainFrame)throw Error('Invalid authentication caller');try{return await chatgpt.action(action,value);}catch(error){throw Error(error?.name==='ChatGPTError'?error.message:'ChatGPT operation failed. Check permission and OS credential protection, then try again.');}});
+let pluginNetwork;
+const pluginFetch=async(url,init)=>{const proxy=await network.action('state'),use=updatePreferences().useProxy&&proxy.url,key=use||'system';if(updatePreferences().useProxy&&!proxy.url)throw Error('Save a proxy address in Connection settings before using it for plugin downloads.');if(use)return pluginNetworkTransport.createCurlFetch(use)(url,init);if(!pluginNetwork||pluginNetwork.key!==key){const connection=session.fromPartition('scoreler-plugin-download-'+randomUUID(),{cache:false});await connection.setProxy(use?{mode:'fixed_servers',proxyRules:use,proxyBypassRules:'localhost;127.0.0.1;[::1]'}:{mode:'system'});connection.setPermissionRequestHandler((_c,_p,done)=>done(false));pluginNetwork={key,connection};}return use?pluginNetworkTransport.createCurlFetch(use)(url,init):pluginNetwork.connection.fetch(url,{...init,credentials:'omit'});};
+const plugins=pluginsHost.createPlugins({app,BrowserWindow,session,dialog,getWindow:()=>mainWindow,fetcher:pluginFetch});
+ipcMain.handle('scoreler-plugins',async(event,action,value)=>{validateUpdateSender(event);if(event.senderFrame!==mainWindow.webContents.mainFrame)throw Error('Invalid plugin caller');return plugins.action(action,value);});
 let tray = null;
 let isQuitting = false;
 const companion=createCompanion({getAppearance:()=>appearanceStore.read(),home:innoHome,getMainWindow:()=>mainWindow,getPort:()=>serverPort,showMainWindow:()=>showMainWindow(),isQuitting:()=>isQuitting});

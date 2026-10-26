@@ -1,5 +1,5 @@
 export const pageFeatures=['home','assistant','calendar','library','exams','mistakes','notes','videos','email','browser'] as const;
-export const toolFeatures=['dictation','capsules','calculator','timer','stopwatch','startup','wheel','markdown','number'] as const;
+export const toolFeatures=['dictation','capsules','calculator','timer','stopwatch','startup','wheel','markdown','number','plugins'] as const;
 export type ToolFeature=typeof toolFeatures[number];
 export type FeatureId=typeof pageFeatures[number]|ToolFeature;
 export interface FeatureLayout {sidebar:FeatureId[];toolbox:FeatureId[]}
