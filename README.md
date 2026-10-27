@@ -248,6 +248,11 @@ The installed updater downloads public GitHub source without sign-in. Private re
 
 ## Update log
 
+### 1.3.3
+
+- Simplify installed-plugin cards in Toolbox to show the icon, name and version. Detailed descriptions and credits remain in the plugin manager and plugin interface.
+- Verified the frontend build, three Toolbox tests and the real desktop install/open/return flow.
+
 ### 1.3.2
 
 - Add a downloadable offline Chinese–English neural translator to the plugin catalogue, with bundled OPUS-MT models, Transformers.js, ONNX Runtime and full upstream credits/licences. No account, API key or network is needed after installation.
