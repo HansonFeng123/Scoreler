@@ -13,6 +13,8 @@ import updateState from './update-state.cjs';
 for(const stream of [process.stdout,process.stderr])stream?.on('error',error=>{if(error.code!=='EPIPE')throw error;});
 import githubUpdates from './github-updates.cjs';
 import pluginsHost from './plugins.cjs';
+import terminalHost from './cli-bridge.cjs';
+import terminalInstall from './cli-install.cjs';
 import distributionDefaults from './default-config.cjs';
 import {setupMail} from './mail-integration.js';
 import {setupStudyBrowser} from './study-browser.js';
@@ -36,10 +38,10 @@ githubUpdates.setProfile(app.getPath('userData'));
 pluginsHost.registerScheme(protocol);
 const hasInstanceLock=app.requestSingleInstanceLock();
 if(!hasInstanceLock)app.exit(0);
-try{updateState.activatePending(app.getPath('userData'));}catch{dialog.showErrorBox('Scoreler update','The automatic backup failed. The previous version remains selected.');}
+try{if(!process.env.SCORELER_PREVIEW)updateState.activatePending(app.getPath('userData'));}catch{dialog.showErrorBox('Scoreler update','The automatic backup failed. The previous version remains selected.');}
 const ready=updateState.read(join(app.getPath('userData'),'updates','ready.json'));
 const managedRoot=updateState.selectedCandidate(app.getPath('userData'),ready,app.getAppPath());
-if(managedRoot&&managedRoot.toLowerCase()!==app.getAppPath().toLowerCase()){
+if(!process.env.SCORELER_PREVIEW&&managedRoot&&managedRoot.toLowerCase()!==app.getAppPath().toLowerCase()){
  app.releaseSingleInstanceLock();const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;
  const child=spawn(join(managedRoot,'node_modules/electron/dist/electron.exe'),[managedRoot,'--scoreler-profile='+app.getPath('userData')],{cwd:managedRoot,env,detached:true,stdio:'ignore',windowsHide:true});child.unref();app.exit(0);
 }
@@ -50,8 +52,9 @@ app.on('second-instance',()=>showMainWindow());
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 let scorelerIcon = join(__dirname,process.platform==='win32'?"scoreler.ico":"scoreler.png");
+const scorelerAppId=process.env.SCORELER_PREVIEW?"com.scoreler.desktop.preview":"com.scoreler.desktop";
 app.setName("Scoreler");
-app.setAppUserModelId("com.scoreler.desktop");
+app.setAppUserModelId(scorelerAppId);
 
 // Older source updaters launch electron.exe directly. Repair at the candidate's
 // first launch as well, so upgrading from those releases needs no manual patch.
@@ -79,8 +82,15 @@ const explicitHome = process.argv.find(arg => arg.startsWith('--scoreler-home=')
 const innoHome = explicitHome || process.env.SCORELER_HOME || join(app.getPath("userData"), "study");
 const desktopToken = randomBytes(32).toString("hex");
 const serverInstance = randomBytes(16).toString("hex");
-const appearanceStore=appearanceHelper.createAppearanceStore(innoHome);
+const appearanceStore=appearanceHelper.createAppearanceStore(innoHome,nativeImage);
 if(existsSync(appearanceStore.icon))scorelerIcon=appearanceStore.icon;
+function repairAppShortcut(){
+ if(process.platform!=='win32'||process.env.SCORELER_SMOKE_DIR||app.getPath('userData')!==join(app.getPath('appData'),'scoreler-desktop'))return;
+ const options={shell,appData:app.getPath('appData'),profile:app.getPath('userData'),executable:process.execPath,installed:join(process.env.LOCALAPPDATA||app.getPath('home'),'Programs','Scoreler','Scoreler.exe'),root:app.getAppPath(),icon:scorelerIcon};
+ if(process.env.SCORELER_PREVIEW)windowsShortcut.repairPreviewShortcut(options);
+ else if(!process.env.SCORELER_TEST_NO_SHELL_REGISTRATION)windowsShortcut.repairWindowsShortcut(options);
+}
+
 const configDir = join(innoHome, "config");
 const configPath = join(configDir, "config.json");
 
@@ -111,7 +121,7 @@ function startDesktopUpdate(target,mode){
  writeFileSync(join(dir,'status.json'),JSON.stringify({state:mode==='activate'?'restarting':'downloading',target,time:new Date().toISOString()}));
  const child=spawn(process.execPath,[helper,app.getPath('userData'),target,String(process.pid),mode,process.execPath,app.getAppPath().endsWith('.asar')?'':app.getAppPath()],{env:{...process.env,ELECTRON_RUN_AS_NODE:'1',SCORELER_ELECTRON_DIST:process.env.SCORELER_ELECTRON_DIST||(!app.isPackaged?dirname(process.execPath):'')},windowsHide:true,detached:true,stdio:'ignore'});writeFileSync(join(dir,'worker.json'),JSON.stringify({pid:child.pid}));child.once('error',()=>{writeFileSync(join(dir,'status.json'),JSON.stringify({state:'failed',target,detail:'Could not start the background updater.',time:new Date().toISOString()}));try{unlinkSync(join(dir,'worker.json'));}catch{}});child.unref();return {started:true,phase:mode==='activate'?'restarting':'preparing'};
 }
-async function prepareAutomaticUpdate(){if(!updatePreferences().automatic||process.env.SCORELER_SMOKE_DIR)return;try{const target=await githubUpdates.latest();const pending=updateState.read(join(app.getPath('userData'),'updates','pending.json'));const origin=updateState.read(join(app.getAppPath(),'update-origin.json'));const current=origin?.commit||JSON.parse(readFileSync(join(app.getAppPath(),'package.json'),'utf8')).scorelerSourceCommit||execFileSync('git',['rev-parse','HEAD'],{cwd:app.getAppPath(),encoding:'utf8',windowsHide:true}).trim();if(target!==current&&pending?.commit!==target)startDesktopUpdate(target,'prepare');}catch{}}
+async function prepareAutomaticUpdate(){if(!updatePreferences().automatic||process.env.SCORELER_SMOKE_DIR||process.env.SCORELER_PREVIEW)return;try{const target=await githubUpdates.latest();const pending=updateState.read(join(app.getPath('userData'),'updates','pending.json'));const origin=updateState.read(join(app.getAppPath(),'update-origin.json'));const current=origin?.commit||JSON.parse(readFileSync(join(app.getAppPath(),'package.json'),'utf8')).scorelerSourceCommit||execFileSync('git',['rev-parse','HEAD'],{cwd:app.getAppPath(),encoding:'utf8',windowsHide:true}).trim();if(target!==current&&pending?.commit!==target)startDesktopUpdate(target,'prepare');}catch{}}
 ipcMain.handle('scoreler-update-preferences',(event,patch)=>{validateUpdateSender(event);if(patch!==undefined){if(!patch||Object.keys(patch).some(k=>!['automatic','useProxy'].includes(k)||typeof patch[k]!=='boolean'))throw Error('Invalid update preference');const dir=join(app.getPath('userData'),'updates');mkdirSync(dir,{recursive:true});writeFileSync(join(dir,'preferences.json'),JSON.stringify({...updatePreferences(),...patch}));if(patch.automatic)void prepareAutomaticUpdate();}return {...updatePreferences(),...updateStatus()};});
 ipcMain.handle('scoreler-source-update-apply',async(event,target)=>{
  validateUpdateSender(event);if(typeof target!=='string'||!/^[a-f0-9]{40}$/.test(target))throw Error('Check updates before applying.');
@@ -124,10 +134,30 @@ let serverProcess = null;
 const network=createNetworkPreferences({app,session});
 ipcMain.handle('scoreler-network',async(event,action,value)=>{validateUpdateSender(event);if(event.senderFrame!==mainWindow.webContents.mainFrame)throw Error('Invalid network caller');try{return await network.action(action,value);}catch{throw Error('Could not apply proxy settings. Check the address and connection.');}});
 const chatgpt=createChatGPTIntegration({app,safeStorage,shell,dialog,getWindow:()=>mainWindow,fetch:network.fetch});
+const terminalInstaller=terminalInstall.createCliInstall({profile:app.getPath('userData'),root:app.getAppPath(),executable:process.execPath,version:JSON.parse(readFileSync(join(app.getAppPath(),'package.json'),'utf8')).version,preview:!!process.env.SCORELER_PREVIEW});
+let terminalBridge;
+async function startTerminalBridge(){
+ if(terminalBridge||!terminalInstaller.state().installed&&!process.env.SCORELER_CLI_TEST)return;
+ const request=async(path,method='GET',value,signal,stream=false)=>{
+  const response=await fetch(`http://127.0.0.1:${serverPort}`+path,{method,signal,headers:{'Content-Type':'application/json','x-scoreler-desktop-token':desktopToken},...(value===undefined?{}:{body:JSON.stringify(value)})});
+  if(!response.ok){const error=await response.json().catch(()=>({}));throw Error(error.error||'Scoreler request failed (HTTP '+response.status+')');}
+  return stream?response:response.json();
+ };
+ terminalBridge=await terminalHost.createCliBridge({profile:app.getPath('userData'),dispatch:terminalHost.createCliDispatcher({request,chatgpt,version:terminalInstaller.state().version,getLocale:()=>appearanceStore.read()?.locale})});
+}
+ipcMain.handle('scoreler-cli',async(event,action)=>{
+ validateUpdateSender(event);if(event.senderFrame!==mainWindow.webContents.mainFrame)throw Error('Invalid terminal caller');
+ if(action==='state')return terminalInstaller.state();
+ if(action==='install'){const value=terminalInstaller.install();await startTerminalBridge();return value;}
+ if(action==='uninstall'){terminalBridge?.close();terminalBridge=null;return terminalInstaller.uninstall();}
+ throw Error('Invalid terminal action');
+});
+app.on('before-quit',()=>terminalBridge?.close());
+try{terminalInstaller.sync();}catch{}
 ipcMain.handle('scoreler-chatgpt',async(event,action,value)=>{validateUpdateSender(event);if(event.senderFrame!==mainWindow.webContents.mainFrame)throw Error('Invalid authentication caller');try{return await chatgpt.action(action,value);}catch(error){throw Error(error?.name==='ChatGPTError'?error.message:'ChatGPT operation failed. Check permission and OS credential protection, then try again.');}});
 let pluginNetwork;
 const pluginFetch=async(url,init)=>{const proxy=await network.action('state'),use=updatePreferences().useProxy&&proxy.url,key=use||'system';if(updatePreferences().useProxy&&!proxy.url)throw Error('Save a proxy address in Connection settings before using it for plugin downloads.');if(use)return pluginNetworkTransport.createCurlFetch(use)(url,init);if(!pluginNetwork||pluginNetwork.key!==key){const connection=session.fromPartition('scoreler-plugin-download-'+randomUUID(),{cache:false});await connection.setProxy(use?{mode:'fixed_servers',proxyRules:use,proxyBypassRules:'localhost;127.0.0.1;[::1]'}:{mode:'system'});connection.setPermissionRequestHandler((_c,_p,done)=>done(false));pluginNetwork={key,connection};}return use?pluginNetworkTransport.createCurlFetch(use)(url,init):pluginNetwork.connection.fetch(url,{...init,credentials:'omit'});};
-const plugins=pluginsHost.createPlugins({app,BrowserWindow,WebContentsView,session,dialog,getWindow:()=>mainWindow,fetcher:pluginFetch});
+const plugins=pluginsHost.createPlugins({app,BrowserWindow,WebContentsView,session,dialog,getWindow:()=>mainWindow,fetcher:pluginFetch,getTheme:()=>appearanceStore.read()});
 ipcMain.handle('scoreler-plugins',async(event,action,value)=>{validateUpdateSender(event);if(event.senderFrame!==mainWindow.webContents.mainFrame)throw Error('Invalid plugin caller');return plugins.action(action,value);});
 let tray = null;
 let isQuitting = false;
@@ -135,7 +165,7 @@ const companion=createCompanion({getAppearance:()=>appearanceStore.read(),home:i
 let mailIntegration=null,studyBrowser=null;
 ipcMain.on('scoreler-loading-appearance',event=>{event.returnValue=event.sender===loadingWindow?.webContents?appearanceStore.snapshot():{};});
 ipcMain.handle('scoreler-appearance-set',(event,value)=>{validateUpdateSender(event);let png;if(value?.icon!==undefined){if(typeof value.icon!=='string'||value.icon.length>400000||!/^data:image\/png;base64,[a-z0-9+/=]+$/i.test(value.icon))throw Error('Invalid app icon');const image=nativeImage.createFromDataURL(value.icon);if(image.isEmpty()||image.getSize().width!==256||image.getSize().height!==256)throw Error('Invalid app icon size');png=image.toPNG();}
- appearanceStore.save(value,png);companion.refreshAppearance();if(png){scorelerIcon=appearanceStore.icon;mainWindow?.setIcon(scorelerIcon);tray?.setImage(nativeImage.createFromPath(appearanceStore.png).resize({width:20,height:20}));if(process.platform==='win32'&&mainWindow){const installed=join(process.env.LOCALAPPDATA||app.getPath('home'),'Programs','Scoreler','Scoreler.exe');mainWindow.setAppDetails({appId:'com.scoreler.desktop',appIconPath:scorelerIcon,appIconIndex:0,relaunchDisplayName:'Scoreler',relaunchCommand:existsSync(installed)?'"'+installed+'"':'"'+process.execPath+'" "'+app.getAppPath()+'" --scoreler-profile="'+app.getPath('userData')+'"'});mainWindow.setIcon(scorelerIcon);if(!process.env.SCORELER_SMOKE_DIR&&!process.env.SCORELER_TEST_NO_SHELL_REGISTRATION&&app.getPath('userData')===join(app.getPath('appData'),'scoreler-desktop'))try{windowsShortcut.repairWindowsShortcut({shell,appData:app.getPath('appData'),profile:app.getPath('userData'),executable:process.execPath,installed,root:app.getAppPath(),icon:scorelerIcon});}catch{}}}return {saved:true};});
+ appearanceStore.save(value,png);plugins.refreshTheme();companion.refreshAppearance();if(png){scorelerIcon=appearanceStore.icon;mainWindow?.setIcon(scorelerIcon);tray?.setImage(nativeImage.createFromPath(appearanceStore.png).resize({width:20,height:20}));if(process.platform==='win32'&&mainWindow){const installed=join(process.env.LOCALAPPDATA||app.getPath('home'),'Programs','Scoreler','Scoreler.exe');mainWindow.setAppDetails({appId:scorelerAppId,appIconPath:scorelerIcon,appIconIndex:0,relaunchDisplayName:'Scoreler',relaunchCommand:!process.env.SCORELER_PREVIEW&&existsSync(installed)?'"'+installed+'"':'"'+process.execPath+'" "'+app.getAppPath()+'" --scoreler-profile="'+app.getPath('userData')+'"'});mainWindow.setIcon(scorelerIcon);try{repairAppShortcut();}catch{}}}return {saved:true};});
 
 // Native Windows toast support can register a Start-menu shortcut as a side
 // effect. Isolated smoke tests must not register their temporary executable.
@@ -315,7 +345,7 @@ function openLoadingWindow() {
   loadingWindow = new BrowserWindow({
     show:!process.env.SCORELER_SMOKE_DIR,
     icon: scorelerIcon,
-    title: "Scoreler",
+    title: process.env.SCORELER_PREVIEW?"Scoreler 1.4 — local preview":"Scoreler",
     width: 400,
     height: 280,
     resizable: false,
@@ -451,7 +481,7 @@ function openMainWindow() {
     height: 800,
     minWidth: 800,
     minHeight: 600,
-    title: "Scoreler",
+    title: process.env.SCORELER_PREVIEW?"Scoreler 1.4 — local preview":"Scoreler",
     icon: scorelerIcon,
     autoHideMenuBar: true,
     // Keep the macOS traffic lights, but let the renderer own the area below
@@ -468,6 +498,9 @@ function openMainWindow() {
     },
   });
 
+  if(process.env.SCORELER_PREVIEW){
+    mainWindow.on('page-title-updated',event=>{event.preventDefault();mainWindow?.setTitle('Scoreler 1.4 — local preview');});
+  }
   if (process.env.SCORELER_SMOKE_DIR) {
     const output = process.env.SCORELER_SMOKE_DIR;
     mkdirSync(output,{recursive:true});
@@ -500,10 +533,15 @@ function openMainWindow() {
   }
   if(process.platform==='win32'){
     const installed=process.env.SCORELER_INSTALLED_LAUNCHER||join(process.env.LOCALAPPDATA||app.getPath('home'),'Programs','Scoreler','Scoreler.exe');
-    mainWindow.setAppDetails({appId:'com.scoreler.desktop',appIconPath:scorelerIcon,appIconIndex:0,relaunchDisplayName:'Scoreler',relaunchCommand:existsSync(installed)?'"'+installed+'"':'"'+process.execPath+'" "'+app.getAppPath()+'" --scoreler-profile="'+app.getPath('userData')+'"'});
+    mainWindow.setAppDetails({appId:scorelerAppId,appIconPath:scorelerIcon,appIconIndex:0,relaunchDisplayName:'Scoreler',relaunchCommand:!process.env.SCORELER_PREVIEW&&existsSync(installed)?'"'+installed+'"':'"'+process.execPath+'" "'+app.getAppPath()+'" --scoreler-profile="'+app.getPath('userData')+'"'});
     mainWindow.setIcon(scorelerIcon);
   }
-  mainWindow.loadURL(`http://127.0.0.1:${serverPort}`);
+  // Local UI HTML must not reuse an index pointing at assets from an older build.
+  let localUiRecovered=false;
+  const recoverLocalUi=()=>{if(localUiRecovered||!mainWindow||mainWindow.isDestroyed())return;localUiRecovered=true;mainWindow.webContents.reloadIgnoringCache();};
+  mainWindow.webContents.on('did-fail-load',(_event,code,_description,_url,isMainFrame)=>{if(isMainFrame&&code!==-3)setTimeout(recoverLocalUi,500);});
+  mainWindow.webContents.on('did-finish-load',()=>{setTimeout(()=>{if(!mainWindow||mainWindow.isDestroyed())return;void mainWindow.webContents.executeJavaScript('!!document.getElementById("root")?.childElementCount').then(rendered=>{if(!rendered)recoverLocalUi();}).catch(()=>recoverLocalUi());},2500);});
+  mainWindow.loadURL(`http://127.0.0.1:${serverPort}`,{extraHeaders:'Cache-Control: no-cache\nPragma: no-cache'});
 
   // Chromium remembers per-origin page zoom. Reset it for the local app so a
   // previous Ctrl +/- does not compound Windows display scaling on restart.
@@ -685,9 +723,7 @@ async function startConfiguredOllama() {
 }
 // ── 应用生命周期 ──────────────────────────────────────────────────────────────
 app.whenReady().then(async () => {
-  if(process.platform==='win32'&&!process.env.SCORELER_SMOKE_DIR&&!process.env.SCORELER_TEST_NO_SHELL_REGISTRATION&&app.getPath('userData')===join(app.getPath('appData'),'scoreler-desktop')){
-    try{windowsShortcut.repairWindowsShortcut({shell,appData:app.getPath('appData'),profile:app.getPath('userData'),executable:process.execPath,installed:join(process.env.LOCALAPPDATA||app.getPath('home'),'Programs','Scoreler','Scoreler.exe'),root:app.getAppPath(),icon:scorelerIcon});}catch{}
-  }
+  try{repairAppShortcut();}catch{}
   if(!hasInstanceLock)return;
   tray = new Tray(nativeImage.createFromPath(scorelerIcon).resize({width:20,height:20}));
   tray.setToolTip("Scoreler");
@@ -709,7 +745,7 @@ app.whenReady().then(async () => {
   mailIntegration=await setupMail({home:innoHome,token:desktopToken,icon:scorelerIcon,getMainWindow:()=>mainWindow,getPort:()=>serverPort,companion,showMainWindow});
   openLoadingWindow();
   void startConfiguredOllama();
-  startServer(() => {void openMainWindow();companion.start();});
+  startServer(() => {void openMainWindow();companion.start();void startTerminalBridge().catch(()=>{});});
 });
 
 app.on("window-all-closed", () => {

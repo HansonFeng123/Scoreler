@@ -1,6 +1,6 @@
 {
   "name": "scoreler-desktop",
-  "version": "1.3.3",
+  "version": "1.4.0",
   "private": true,
   "description": "Scoreler is a personal AI agent focused on studying.",
   "author": "Inno Agent Contributors",
@@ -63,7 +63,8 @@
       "packages/scoreler-chatgpt/src/**/*",
       "packages/scoreler-chatgpt/LICENSE",
       "packages/scoreler-chatgpt/README.md",
-      "plugins.json"
+      "plugins.json",
+      "scripts/scoreler-cli-launch.cjs"
     ],
     "asarUnpack": [
       "**/node_modules/node-pty/**/*",

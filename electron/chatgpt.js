@@ -86,8 +86,10 @@ export function createChatGPTIntegration({app,safeStorage,shell,dialog,getWindow
    // Never propagate SDK/network error objects, request bodies or credentials.
    const known=['Select this ChatGPT model','ChatGPT plan-use','This model is no longer','This model does not advertise','This reasoning level','ChatGPT request cancelled'];
    const messages={subscription_sharing_usage_limit_exceeded:'ChatGPT plan usage limit reached. Manage usage and app limits in ChatGPT settings.',subscription_sharing_user_not_eligible:'This account or workspace is not eligible for ChatGPT plan use.',subscription_sharing_unsupported_capability:'This model or ChatGPT plan connection does not support the requested capability.',subscription_sharing_route_not_supported:'The requested ChatGPT plan operation is unsupported.'};
+   const safeCode=typeof error.code==='string'&&/^[a-z_]{1,60}$/.test(error.code)?error.code:'request_failed';
+   const safeStatus=Number.isInteger(error.status)?error.status:undefined;
    const message=known.some(s=>error.message?.startsWith(s))?error.message:messages[error.code]||'ChatGPT request could not complete. Check connection, permission, model capability, or plan usage in Settings.';
-   reply({error:message,code:typeof error.code==='string'&&/^[a-z_]{1,60}$/.test(error.code)?error.code:'request_failed'});
+   reply({error:message+' ['+safeCode+(safeStatus?' · HTTP '+safeStatus:'')+']',code:safeCode});
   }finally{requests.delete(id);busy=false;}
  });child.once('exit',()=>{for(const c of requests.values())c.abort();});}
  return {action,attach};

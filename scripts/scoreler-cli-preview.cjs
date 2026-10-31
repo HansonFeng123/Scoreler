@@ -1,0 +1,7 @@
+// Development-only local preview: no public update and no automatic PATH change.
+const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process'),os=require('node:os'),{pathToFileURL}=require('node:url');
+const root=p.resolve(__dirname,'..'),existing=process.argv.includes('--existing-profile'),profile=existing?p.join(process.env.APPDATA||p.join(os.homedir(),'AppData','Roaming'),'scoreler-desktop'):p.join(root,'runtime','cli-preview-profile');
+fs.mkdirSync(profile,{recursive:true});
+const startApp=()=>{const executable=require('./preview-runtime.cjs').preparePreviewRuntime(root,profile),env={...process.env,SCORELER_PREVIEW:'1',SCORELER_CLI_TEST:'1',SCORELER_TEST_NO_SHELL_REGISTRATION:'1'};delete env.ELECTRON_RUN_AS_NODE;const child=cp.spawn(executable,[root,'--scoreler-profile='+profile],{cwd:root,env,detached:true,stdio:'ignore',windowsHide:true});child.once('error',()=>process.stderr.write('Could not start the Scoreler preview. Run the build first.\n'));child.unref();};
+if(process.argv.includes('--terminal'))import(pathToFileURL(p.join(root,'apps/inno-agent/dist/scoreler/terminal.js')).href).then(({startTerminal})=>startTerminal({profile,args:process.argv.slice(2).filter(a=>!['--terminal','--existing-profile'].includes(a)),startApp})).catch(error=>{process.stderr.write(error.message+'\n');process.exitCode=1;});
+else {startApp();console.log('Opened the local Scoreler 1.4 preview. Run this script with --terminal'+(existing?' --existing-profile':'')+' to test the CLI.');}

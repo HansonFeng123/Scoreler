@@ -1,4 +1,5 @@
 import type { IncomingMessage as HttpReq, ServerResponse } from "node:http";
+import {officialDeepSeek} from '../../scoreler/reasoning.js';
 import { probeProviderModels } from "../../agent/model-probe.js";
 import {
 	getAvailableModels,
@@ -279,6 +280,21 @@ export async function handleSettingsRoutes(
 		}
 		json(res, 200, buildSafeSettings(config));
 		return true;
+	}
+
+	// Change only the selected model's advertised reasoning setting; preserve credentials and headers.
+	if (method === 'POST' && url === '/api/settings/reasoning') {
+		const body = await readBody(req) as Record<string, unknown>;
+		const provider = config.providers[config.defaultProvider];
+		const official = !!provider && officialDeepSeek(provider,config.defaultModel);
+		if (!official || !['deepseek-flash','deepseek-v4-pro'].includes(config.defaultModel) || !['', 'none','low','high','max'].includes(String(body.effort))) {
+			json(res,400,{error:'This model does not advertise that reasoning level'}); return true;
+		}
+		const effort = body.effort as InnoModelConfig['reasoningLevel'] | '';
+		const next = {...config, providers:{...config.providers,[config.defaultProvider]:{...provider,models:provider.models.map(model=>model.id===config.defaultModel?{...model,reasoning:true,reasoningLevel:effort||undefined}:model)}}};
+		save(saveConfig(paths.configPath,next));
+		await refreshConfiguredProviders(config);
+		json(res,200,{effort}); return true;
 	}
 
 	// Probe a provider's model list server-side (the browser can't call

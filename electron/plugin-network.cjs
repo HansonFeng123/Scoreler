@@ -3,7 +3,7 @@ const {spawn}=require('node:child_process');
 function createCurlFetch(proxy){
  const saved=new URL(proxy);if(!['socks5:','http:','https:'].includes(saved.protocol)||saved.username||saved.password||!saved.port||saved.search||saved.hash||!['','/'].includes(saved.pathname))throw Error('Invalid plugin proxy');
  return (input,init={})=>new Promise((resolve,reject)=>{
-  const url=new URL(input);if(url.protocol!=='https:'||url.username||url.password||!['github.com','api.github.com','release-assets.githubusercontent.com','objects.githubusercontent.com'].includes(url.hostname))return reject(Error('Unapproved plugin network destination'));
+  const url=new URL(input);if(url.protocol!=='https:'||url.username||url.password||!['github.com','api.github.com','release-assets.githubusercontent.com','objects.githubusercontent.com','raw.githubusercontent.com'].includes(url.hostname))return reject(Error('Unapproved plugin network destination'));
   const quote=value=>'"'+String(value).replaceAll('\\','\\\\').replaceAll('"','\\"')+'"';
   let config='url = '+quote(url.href)+'\nproxy = '+quote(saved.href.replace(/^socks5:/,'socks5h:'))+'\nheader = "Accept: application/vnd.github+json"\nheader = "User-Agent: Scoreler-plugin-downloader"\n';
   const requested=new Headers(init.headers);for(const name of ['range','cache-control']){const value=requested.get(name);if(value){if(name==='range'&&!/^bytes=\d+-\d+$/.test(value))return reject(Error('Invalid plugin byte range'));config+='header = '+quote(name+': '+value)+'\n';}}

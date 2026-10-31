@@ -1,4 +1,4 @@
-export const setupTopics=['quickstart','models','web-search','email','browser','agent'] as const;
+export const setupTopics=['quickstart','models','web-search','email','browser','agent','cli','plugins','chatgpt','proxy','github-proxy'] as const;
 export type SetupTopic=typeof setupTopics[number];
 export const startupGuide=[
   {
@@ -149,6 +149,131 @@ export const startupGuide=[
       ],
       "example": "阅读启动指南，检查我的配置，帮我确定下一步。"
     }
+  },
+{
+  "id": "cli",
+  "en": {
+    "title": "Scoreler CLI",
+    "intro": "Settings → Scoreler CLI (optional). Chat in a terminal alongside today’s scrollable agenda.",
+    "steps": [
+      "Choose Install CLI, then open a new CMD, PowerShell or terminal and type scoreler. The optional command follows Scoreler updates.",
+      "Use /new for a new conversation, /model or /reasoning to open a picker; use ↑/↓ and Enter to confirm, or Esc to cancel. /help lists commands.",
+      "Type Chinese or English. Alt+V adds a clipboard screenshot or image path; /image adds a file. Choose a model that supports images. Alt+↑/↓ scrolls the agenda; PgUp/PgDn scrolls chat.",
+      "The CLI shares this profile’s configured providers, ChatGPT connection, histories and study tools. Scoreler starts when needed; ChatGPT credentials remain in the desktop main process."
+    ],
+    "example": "Open CLI settings and explain how to select a model and paste a screenshot."
+  },
+  "zh": {
+    "title": "Scoreler CLI",
+    "intro": "设置 → Scoreler CLI（可选）。在终端聊天，旁边显示可滚动的今日日程。",
+    "steps": [
+      "点击安装 CLI，然后打开新的 CMD、PowerShell 或终端，输入 scoreler。可选命令会随 Scoreler 更新。",
+      "输入 /new 新建对话；/model 或 /reasoning 打开选择器，用 ↑/↓ 选择、Enter 确认、Esc 取消。/help 查看全部命令。",
+      "支持中英文输入。Alt+V 添加剪贴板截图或图片路径，/image 添加图片文件；识图需要支持图片的模型。Alt+↑/↓ 滚动日程，PgUp/PgDn 滚动聊天。",
+      "与当前资料库共用服务商、ChatGPT 连接、历史记录和学习工具。需要时会启动桌面应用，ChatGPT 凭据仅保留在桌面主进程。"
+    ],
+    "example": "打开 CLI 设置，教我选择模型和粘贴截图。"
   }
+},
+{
+  "id": "plugins",
+  "en": {
+    "title": "Plugins",
+    "intro": "Toolbox → Plugins. Discover, install and update independent study tools.",
+    "steps": [
+      "Choose Refresh plugin list to fetch the independent GitHub catalogue without updating Scoreler. A failed refresh keeps the last valid list.",
+      "Choose Review installation, check author, version and source, then confirm installation. A checksum checks integrity, not safety.",
+      "Installed, enabled plugins appear as tiles in Toolbox and open inside Scoreler. Use Plugins to disable, uninstall or review an available update. Refresh does not automatically update installed packages.",
+      "List refresh and downloads follow the GitHub updates proxy switch. These tools run offline in isolated views without a study-data or credential API."
+    ],
+    "example": "Open Plugins and explain how to refresh the list and install a tool."
+  },
+  "zh": {
+    "title": "插件",
+    "intro": "百宝箱 → 插件。查找、安装和更新独立学习工具。",
+    "steps": [
+      "点击刷新插件列表，从独立 GitHub 目录获取可用插件，无需更新整个 Scoreler。刷新失败会保留上次有效列表。",
+      "点击查看并安装，检查作者、版本与来源后确认安装。校验和只能验证完整性，不代表安全审查。",
+      "已安装且启用的插件会显示为百宝箱卡片，并在 Scoreler 内打开。可在插件页停用、卸载或查看更新；刷新列表不会自动更新已安装插件。",
+      "列表刷新和下载遵循 GitHub 更新代理开关。工具在离线隔离视图中运行，没有学习数据或凭据接口。"
+    ],
+    "example": "打开插件页，教我刷新列表并安装工具。"
+  }
+},
+{
+  "id": "chatgpt",
+  "en": {
+    "title": "ChatGPT account and models",
+    "intro": "Settings → ChatGPT. Optional and separate from API-key providers.",
+    "steps": [
+      "Read the privacy notice, authorize plan use and choose Continue with ChatGPT. Complete the official browser authorization yourself; never paste passwords, cookies or session tokens.",
+      "After connecting, Refresh models, select an available model and a supported reasoning level, then choose Use this ChatGPT model. Your other configured models remain selectable in chat and CLI.",
+      "Review chat and background permission preferences separately. You can restore prompts in Settings, manage usage and access, or sign out / disconnect.",
+      "Authorized requests send instructions, relevant conversation/memory, attachments and tool results to OpenAI. Tokens stay OS-encrypted locally in the desktop main process. Eligibility and subscription limits apply; this is not unlimited use or API credit."
+    ],
+    "example": "Open ChatGPT settings and explain model selection and usage permissions."
+  },
+  "zh": {
+    "title": "ChatGPT 账号与模型",
+    "intro": "设置 → ChatGPT。可选登录方式，与 API 密钥服务商分开配置。",
+    "steps": [
+      "阅读隐私说明并明确授权套餐使用，点击 Continue with ChatGPT，自行完成官方浏览器授权。不要粘贴密码、Cookie 或会话令牌。",
+      "连接后刷新模型，选择可用模型及支持的推理强度，再点击使用此 ChatGPT 模型。其他已配置模型仍可在聊天和 CLI 中选择。",
+      "分别检查对话与后台使用许可。可以在设置中恢复询问、管理用量与访问，或退出 / 断开连接。",
+      "授权请求会将指令、相关对话与记忆、附件和工具结果发送给 OpenAI。令牌由系统在本地加密，仅保留在桌面主进程。适用资格及订阅额度限制，不提供无限使用或 API 额度。"
+    ],
+    "example": "打开 ChatGPT 设置，解释模型选择和用量授权。"
+  }
+},
+{
+  "id": "proxy",
+  "en": {
+    "title": "ChatGPT connection proxy",
+    "intro": "Settings → ChatGPT connection. Save an address and choose whether to use it.",
+    "steps": [
+      "Enter a SOCKS5, HTTP or HTTPS proxy address such as socks5://localhost:1080. The proxy must already be running; addresses with usernames or passwords are not supported.",
+      "Choose Use saved proxy, or turn it off and choose system proxy settings or a direct connection. Turning it off keeps the saved address.",
+      "Test connection, then Save connection settings. The test sends no account credentials and does not prove successful account authorization.",
+      "This setting affects ChatGPT sign-in requests, model discovery and study requests. External browser authorization uses the browser’s own network settings; other API providers keep their existing settings. A proxy does not change eligibility or subscription limits."
+    ],
+    "example": "Open connection settings and explain the proxy switches without changing them."
+  },
+  "zh": {
+    "title": "ChatGPT 连接代理",
+    "intro": "设置 → ChatGPT 网络连接。保存代理地址，并选择是否使用。",
+    "steps": [
+      "填写 SOCKS5、HTTP 或 HTTPS 地址，例如 socks5://localhost:1080。代理需已运行，此处不支持带账号密码的地址。",
+      "勾选使用已保存的代理；关闭后可以选择系统代理或直接连接。关闭开关会保留地址。",
+      "先测试连接，再保存连接设置。测试不会发送账号凭据，也不等于账号授权成功。",
+      "此设置影响 ChatGPT 登录请求、模型列表和学习请求。外部浏览器授权使用浏览器自身网络设置；其他 API 服务商保留原有网络设置。代理不会改变使用资格或订阅限制。"
+    ],
+    "example": "打开网络连接设置，解释代理开关，但先不要修改。"
+  }
+},
+{
+  "id": "github-proxy",
+  "en": {
+    "title": "GitHub updates and plugin proxy",
+    "intro": "Settings → App updates → Use saved proxy for GitHub updates.",
+    "steps": [
+      "First save a proxy address in ChatGPT connection settings. You can leave its ChatGPT switch off.",
+      "Enable Use saved proxy for GitHub updates independently. It uses that saved address for GitHub version checks, source downloads, plugin-list refresh and plugin downloads.",
+      "Choose Check for updates, then Prepare in background when an update is available. Wait until preparation is complete before restarting to apply it.",
+      "npm dependency downloads follow npm’s own settings. If a source download fails, check the proxy and retry; failed preparation keeps the current app and records. Your profile is backed up before activation."
+    ],
+    "example": "Open App updates and explain the GitHub proxy and safe update steps."
+  },
+  "zh": {
+    "title": "GitHub 更新与插件代理",
+    "intro": "设置 → 应用更新 → GitHub 更新使用已保存的代理。",
+    "steps": [
+      "先在 ChatGPT 网络连接中保存代理地址；ChatGPT 的代理开关可以保持关闭。",
+      "独立开启 GitHub 更新使用已保存的代理。该地址用于 GitHub 版本检查、源码下载、插件列表刷新与插件下载。",
+      "点击检查更新，有新版本时后台准备更新，等待准备完成后再重启启用。",
+      "npm 依赖下载遵循 npm 自身设置。源码下载失败时检查代理后重试；准备失败会保留当前应用和记录，启用前会备份本地数据。"
+    ],
+    "example": "打开应用更新，解释 GitHub 代理和安全更新步骤。"
+  }
+}
 ] as const;
 export function startupGuideForEdition(_enabled=true){return startupGuide;}

@@ -170,7 +170,7 @@ Release regression checks also exercise the actual frontend, preload bridge, bac
 
 ### Toolbox plugins
 
-Open Toolbox → Plugins and search the catalog bundled with the app. Review author, source, version, compatibility, permissions and checksum before installing. A checksum proves integrity, not safety. Local ZIP import is also available. Installed tools can be opened, disabled, uninstalled or updated from approved catalog sources. A failed update preserves the previous version.
+Open Toolbox → Plugins and select **Refresh plugin list** to fetch the independent [plugin catalog](https://github.com/HansonFeng123/scoreler-plugin-catalog), without updating Scoreler. The last valid list is cached locally; the bundled list is available for first use offline. Refreshing never installs or updates packages automatically. List refreshes use the GitHub update proxy option and send no study records or provider credentials. Search the available list. Review author, source, version, compatibility, permissions and checksum before installing. A checksum proves integrity, not safety. Local ZIP import is also available. Installed tools can be opened, disabled, uninstalled or updated from approved catalog sources. A failed update preserves the previous version.
 
 Installed, enabled plugins appear directly in Toolbox. Open a card to run the offline, no-permission tool inside the Scoreler window in an isolated view; use All tools to return. It provides no study-record, provider-key, Node, Electron or network API. Tool state is in memory and disappears when you leave its view. The browser sandbox is not an OS container; browser flaws and resource exhaustion remain possible. Plugins cannot change the catalog. See [plugin format](docs/plugins.md).
 
@@ -236,6 +236,10 @@ Connect a local folder or import documents, then let indexing finish. Create sub
 
 The calculator supports arithmetic precedence, parentheses, unary signs, percentages and scientific notation. Percent means division by 100; for example, 200 × 15% gives 30. It rejects division by zero and malformed expressions. Other tools include the countdown timer, stopwatch, spin wheel, random integer generator, Markdown PDF export and startup guide. Interface colors follow the chosen theme.
 
+### Use the optional terminal CLI (1.4)
+
+Install the CLI in Settings, open a new terminal, and run `scoreler`. Chat on the left while the daily calendar stays on the right. Use `/new`, `/model`, `/reasoning`, `/image` and `/help`. The component updates with Scoreler. See [setup, commands, privacy and limitations](docs/cli.md).
+
 ### Update an installed copy
 
 1. Save open work and open Settings → App updates.
@@ -248,35 +252,23 @@ The installed updater downloads public GitHub source without sign-in. Private re
 
 ## Update log
 
-### 1.3.3
+### 1.4
 
-- Simplify installed-plugin cards in Toolbox to show the icon, name and version. Detailed descriptions and credits remain in the plugin manager and plugin interface.
-- Verified the frontend build, three Toolbox tests and the real desktop install/open/return flow.
+- Refresh the independent GitHub plugin catalog without updating Scoreler; retain a validated offline cache and require separate review for package installation or updates.
 
-### 1.3.2
-
-- Add a downloadable offline Chinese–English neural translator to the plugin catalogue, with bundled OPUS-MT models, Transformers.js, ONNX Runtime and full upstream credits/licences. No account, API key or network is needed after installation.
-- Add a self-contained WebAssembly plugin format for model-sized packages; v1 tools retain their size and sandbox restrictions.
-- Translation runs on CPU. Short-sentence quality and first-load speed depend on the model and computer; important translations need review.
-
-### 1.3.1
-
-- Show installed plugins directly in Toolbox and open them inside the Scoreler window with the same offline sandbox restrictions.
-- Align dictation subject controls and add a glass surface behind subject-folder navigation.
-- Add optional grading instructions beside the correction button; retain those instructions with each submitted attempt and show them in history.
-- Build, 18 focused tests, real desktop dictation/plugin flow and embedded graph isolation checks passed. See [verification](docs/verification-1.3.1.md).
+- Add an optional terminal command with Chinese input, image/file attachments, streaming study chat, model/reasoning controls and a daily calendar beside the conversation.
+- Reuse the desktop agent, tools, provider settings and saved records. Keep ChatGPT credentials and consent in the existing desktop main process. The terminal command follows the selected Scoreler update.
+- Make plugin download progress visible, bring the completed download review into view, and retain the package for an installation retry while its review remains valid.
+- Add bilingual Startup toolkit guides for the CLI, plugins, ChatGPT and both proxy settings. Let installed plugins follow the app mode and accent without sharing private settings.
+- Publish Windows icons and shortcuts atomically, include native icon sizes, and avoid rewriting unchanged assets.
+- See [CLI setup, commands and privacy](docs/cli.md) and the [verification record](docs/verification-1.4.md) for tested workflows and limitations.
 
 ### 1.3
 
-See [verification results and known limitations](docs/verification-1.3.md) for the release test scope.
-
-- Add Notes-style dictation subject folders/cards, preserved drafts and submitted answer history, read-only review and confirmed deletion.
-- Add a separate, account-bound remembered permission for background ChatGPT study requests, revocable in Settings.
-
-- Add the plugin catalog inside Toolbox, package/source/permission review, local ZIP import, installation, disabling, uninstalling and catalog-approved updates.
-- Run tools in isolated windows with no network, credentials or study-data access by default.
-- Add the graphing calculator example plugin; verified real GitHub downloads, 1.0-to-1.1 updates, failed-update preservation and plotting.
-- Show patch details only for the newest minor line; summarize older minor releases.
+- Add a plugin catalogue, reviewed installation and approved updates, including the graphing calculator and offline Chinese–English translator with upstream credits.
+- Show installed tools in Toolbox and open them inside the app in isolated views. Simplify cards while retaining descriptions and credits in plugin details.
+- Organize dictation by subject, preserve drafts and answer history, support deletion and optional grading instructions.
+- Add a separate remembered permission for ChatGPT background study use. Historical release checks remain in the [verification records](docs/verification-1.3.md).
 
 ### 1.2
 
