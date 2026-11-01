@@ -116,6 +116,7 @@ function updateStatus(){const base=join(app.getPath('userData'),'updates'),statu
 function startDesktopUpdate(target,mode){
  const dir=join(app.getPath('userData'),'updates');mkdirSync(dir,{recursive:true});if(updateDependencies.activeWorker(dir))return {started:false,phase:'preparing'};
  writeFileSync(join(dir,'update-dependencies.cjs'),readFileSync(join(app.getAppPath(),'scripts','update-dependencies.cjs')));
+ writeFileSync(join(dir,'update-archive.cjs'),readFileSync(join(app.getAppPath(),'scripts','update-archive.cjs')));
  writeFileSync(join(dir,'github-updates.cjs'),readFileSync(join(app.getAppPath(),'electron','github-updates.cjs')));
  const helper=join(dir,'desktop-updater.cjs');writeFileSync(helper,readFileSync(join(app.getAppPath(),'scripts','desktop-updater.cjs')));
  writeFileSync(join(dir,'status.json'),JSON.stringify({state:mode==='activate'?'restarting':'downloading',target,time:new Date().toISOString()}));

@@ -252,6 +252,10 @@ The installed updater downloads public GitHub source without sign-in. Private re
 
 ## Update log
 
+### 1.4.2
+
+- Fix update extraction when Windows PowerShell cannot load its optional Archive module. Use the .NET ZIP reader directly, preserve the running version on failure, and include the helper in source and packaged updates.
+
 ### 1.4.1
 
 - Protect saved email configuration with atomic writes, encrypted backups and recovery instead of silently showing an empty account.
