@@ -48,8 +48,9 @@ function installRuntimeBootstrap(root,home){
   const dist=path.dirname(resources),branded=path.join(dist,'Scoreler.exe');
   if(!fs.existsSync(branded)){
    const temporary=path.join(dist,'Scoreler-branding.exe');fs.copyFileSync(path.join(dist,'electron.exe'),temporary);
-   try{execFileSync('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',path.join(root,'scripts/brand-runtime.ps1'),'-Executable',temporary,'-Icon',path.join(root,'electron/scoreler.ico')],{windowsHide:true,stdio:'pipe',timeout:60000});fs.renameSync(temporary,branded);}catch(error){try{fs.unlinkSync(temporary);}catch{}throw Error('Could not prepare the Scoreler runtime icon');}
+   try{execFileSync('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',path.join(root,'scripts/brand-runtime.ps1'),'-Executable',temporary,'-Icon',runtimeIcon(root,home)],{windowsHide:true,stdio:'pipe',timeout:60000});fs.renameSync(temporary,branded);}catch(error){try{fs.unlinkSync(temporary);}catch{}throw Error('Could not prepare the Scoreler runtime icon');}
   }
  }
 }
-module.exports={installRuntimeBootstrap};
+function runtimeIcon(root,home){const icon=require('../electron/appearance.cjs').createAppearanceStore(path.join(home,'study')).icon;return fs.existsSync(icon)?icon:path.join(root,'electron/scoreler.ico');}
+module.exports={installRuntimeBootstrap,runtimeIcon};

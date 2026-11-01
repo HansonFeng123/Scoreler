@@ -8,7 +8,7 @@ In Scoreler Settings, choose **Install CLI**. The optional command is installed 
 scoreler
 ```
 
-The terminal starts Scoreler if necessary. Chat occupies the left side, with today's local calendar on the right. Small terminals show a compact header; `/today` displays the day's full agenda. PgUp/PgDn scroll the conversation. Scroll the mouse wheel over the calendar, or use Alt+Up/Down, to browse its agenda without moving the chat. The terminal and app use the same agent, configured models, authorized study materials, study tools and saved conversation records. Changes to the selected model or reasoning level also apply in the app.
+The terminal command requires Node.js 24 or newer on PATH (the same runtime prerequisite as source updates). It uses the Node console executable; Electron remains the desktop host. The terminal starts Scoreler if necessary. Chat occupies the left side, with today's local calendar on the right. Small terminals show a compact header; `/today` displays the day's full agenda. PgUp/PgDn scroll the conversation. Scroll the mouse wheel over the calendar, or use Alt+Up/Down, to browse its agenda without moving the chat. The terminal and app use the same agent, configured models, authorized study materials, study tools and saved conversation records. Changes to the selected model or reasoning level also apply in the app.
 
 The CLI component follows the ready Scoreler update on each launch. Restart the terminal after an app update. Removing the terminal command from Settings removes only its launcher and user PATH entry.
 

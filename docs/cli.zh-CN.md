@@ -2,6 +2,8 @@
 
 可选终端组件随 Scoreler 1.4 提供。
 
+终端命令需要 PATH 中存在 Node.js 24 或更新版本，与源码更新使用相同的运行时前提。CLI 使用 Node 控制台程序，桌面服务仍由 Electron 运行。
+
 在 Scoreler 设置中点击「安装 CLI」，然后从开始菜单打开新的 PowerShell 或终端，输入：
 
 ```powershell

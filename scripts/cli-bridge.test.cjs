@@ -33,3 +33,9 @@ test('connected ChatGPT models appear without a saved provider and selecting one
  await dispatch('model',{provider:'scoreler-chatgpt',model:'gpt-connected'},{},()=>{});
  const registration=calls.find(c=>c.path==='/api/settings/providers');assert.equal(registration.value.api,'scoreler-chatgpt');assert.equal(registration.value.models[0].id,'gpt-connected');assert.equal(registration.value.apiKey,'');assert.equal(local.providers.other.apiKey,'keep-secret');assert.equal(modelState(local,{session:{sharing:false},models:gpt.models}).some(m=>m.id==='gpt-connected'),false);
 });
+
+test('stable terminal marker uses the same authenticated pipe and is removed on close',async t=>{
+ const profile=fs.mkdtempSync(p.join(os.tmpdir(),'scoreler-cli-marker-'));t.after(()=>fs.rmSync(profile,{recursive:true,force:true}));const terminalProfile=p.join(profile,'stable-local');
+ const bridge=await createCliBridge({profile,terminalProfile,dispatch:async()=>null});const stable=p.join(terminalProfile,'cli/connection.json'),legacy=p.join(profile,'cli/connection.json');
+ assert.deepEqual(JSON.parse(fs.readFileSync(stable)),JSON.parse(fs.readFileSync(legacy)));bridge.close();assert(!fs.existsSync(stable));assert(!fs.existsSync(legacy));
+});

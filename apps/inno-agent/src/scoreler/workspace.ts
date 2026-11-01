@@ -5,6 +5,7 @@ import {validDrawing} from '../shared/drawing.js';
 import { copyFile, unlink, mkdir, readdir, readFile, realpath, lstat, stat, writeFile } from 'node:fs/promises';
 import { join, relative, isAbsolute, extname } from 'node:path';
 import { studentStore, StudentError } from './store.js';
+import {isWindowsProfileMirror} from './profile-path.js';
 import { type AuthorizedFolder, type LibraryDocument, supportsStudyFile, importStudyDocument, extractStudyPages } from './library.js';
 export interface WorkspaceEntry { name:string; path:string; kind:'folder'|'file'; size?:number; readable:boolean }
 export function workspaceRoots(dataDir:string){return studentStore(dataDir).list<AuthorizedFolder>('folders').filter(f=>f.enabled).map(({id,name})=>({id,name}));}
@@ -14,7 +15,10 @@ export async function scopedWorkspacePath(dataDir:string,folderId:string,path:st
  path=path.replaceAll('\\','/');if(isAbsolute(path)||path.split('/').some(s=>s==='..'||s==='.'||s.includes(':')||s.includes('\0')))throw new StudentError('Invalid workspace path');
  const root=await realpath(folder.path);let target=root;
  for(const part of path.split('/').filter(Boolean)){target=join(target,part);if((await lstat(target)).isSymbolicLink())throw new StudentError('Symbolic links are not opened');}
- const resolved=await realpath(target);const rel=relative(root,resolved);if(rel.startsWith('..')||isAbsolute(rel))throw new StudentError('Path is outside this workspace');return {folder,path:resolved,relativePath:rel.replaceAll('\\','/')};
+ const resolved=await realpath(target);const rel=relative(root,resolved);if(rel.startsWith('..')||isAbsolute(rel)){
+  if(process.platform==='win32'&&folderId==='scoreler-notes'&&(await lstat(target)).isFile()&&isWindowsProfileMirror(target,resolved,process.env.APPDATA||'',process.env.LOCALAPPDATA||''))return {folder,path:resolved,relativePath:path};
+  throw new StudentError('Path is outside this workspace');
+ }return {folder,path:resolved,relativePath:rel.replaceAll('\\','/')};
 }
 export async function listWorkspace(dataDir:string,folderId?:string,path=''){
  if(!folderId)return {roots:workspaceRoots(dataDir)};

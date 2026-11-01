@@ -1,4 +1,4 @@
-import {test} from 'node:test';import assert from 'node:assert/strict';import {EventEmitter} from 'node:events';import {mkdtempSync,readFileSync,rmSync} from 'node:fs';import {tmpdir} from 'node:os';import {join} from 'node:path';import {createSchoolMail,validateMailConfig} from './school-mail.js';
+import {test} from 'node:test';import assert from 'node:assert/strict';import {EventEmitter} from 'node:events';import {mkdtempSync,readFileSync,rmSync,mkdirSync,writeFileSync,existsSync} from 'node:fs';import {tmpdir} from 'node:os';import {join} from 'node:path';import {createSchoolMail,validateMailConfig} from './school-mail.js';
 test('mail connects read-only, suppresses old mail, deduplicates new mail and encrypts saved credentials',async()=>{
  const home=mkdtempSync(join(tmpdir(),'scoreler-mail-'));let ids=[10,11],validity=1;const notified=[],opens=[];
  const create=()=>{const client=new EventEmitter();client.mailbox={exists:ids.length,uidValidity:validity};client.connect=async()=>{};client.getMailboxLock=async(_name,options)=>{opens.push(options);return {release(){}};};client.fetchAll=async()=>ids.map(uid=>({uid,envelope:{subject:'Subject '+uid,from:[{name:'Teacher',address:'teacher@school.test'}],date:new Date()},flags:new Set(),size:123}));client.logout=async()=>{};client.close=()=>{};return client;};
@@ -9,6 +9,17 @@ test('mail connects read-only, suppresses old mail, deduplicates new mail and en
  }finally{mail.dispose();rmSync(home,{recursive:true,force:true});}
 });
 test('mail validates TLS connection settings',()=>{assert.throws(()=>validateMailConfig({email:'bad',host:'imap.test.com'}));assert.throws(()=>validateMailConfig({email:'a@test.com',host:'imap.test.com',port:143}));assert.equal(validateMailConfig({email:'a@school.example',host:'imaphz.qiye.163.com',port:993}).host,'imaphz.qiye.163.com');});
+
+test('recovers a damaged settings file from its encrypted backup and disconnect stays disconnected',()=>{
+ const home=mkdtempSync(join(tmpdir(),'scoreler-mail-recovery-')),file=join(home,'config','school-mail.json');mkdirSync(join(home,'config'));
+ const saved={email:'student@school.test',host:'imap.school.test',port:993,secret:'encrypted-fixture',notifications:false};writeFileSync(file,Buffer.alloc(259));writeFileSync(file+'.bak',JSON.stringify(saved));
+ const options={home,encrypt:s=>s,decrypt:()=>{throw Error('Recovery must not decrypt credentials');}};
+ const mail=createSchoolMail(options);try{assert.equal(mail.state().configured,true);assert.deepEqual(JSON.parse(readFileSync(file,'utf8')),saved);mail.disconnect();assert.equal(existsSync(file+'.bak'),false);const reopened=createSchoolMail(options);assert.equal(reopened.state().configured,false);reopened.dispose();}finally{mail.dispose();rmSync(home,{recursive:true,force:true});}
+});
+
+test('damaged settings without a valid backup report an error instead of silently appearing new',()=>{
+ const home=mkdtempSync(join(tmpdir(),'scoreler-mail-damaged-')),file=join(home,'config','school-mail.json');mkdirSync(join(home,'config'));writeFileSync(file,'{');const mail=createSchoolMail({home,encrypt:s=>s,decrypt:s=>s});try{assert.equal(mail.state().configured,false);assert.match(mail.state().error,/could not be read/);assert.equal(readFileSync(file,'utf8'),'{');}finally{mail.dispose();rmSync(home,{recursive:true,force:true});}
+});
 test('returns original HTML fonts and inline images alongside plain text',async()=>{
  const home=mkdtempSync(join(tmpdir(),'scoreler-html-mail-'));const mime=Buffer.from('From: Teacher <teacher@school.test>\r\nTo: student@school.test\r\nSubject: Formatted lesson\r\nMIME-Version: 1.0\r\nContent-Type: multipart/related; boundary="parts"\r\n\r\n--parts\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<p style="font-family:Georgia;font-size:16px">Lesson <a href="https://school.test">Open lesson</a><img src="cid:logo.test"></p>\r\n--parts\r\nContent-Type: image/png\r\nContent-ID: <logo.test>\r\nContent-Disposition: inline\r\nContent-Transfer-Encoding: base64\r\n\r\niVBORw0KGgo=\r\n--parts--\r\n');
  const create=()=>{const client=new EventEmitter();client.mailbox={exists:0,uidValidity:1};client.connect=async()=>{};client.getMailboxLock=async()=>({release(){}});client.fetchOne=async(_uid,query)=>query.source?{source:mime}:{size:mime.length};client.logout=async()=>{};client.close=()=>{};return client;};

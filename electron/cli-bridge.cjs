@@ -42,7 +42,7 @@ function createCliDispatcher({request,chatgpt,version,getLocale=()=>undefined}){
   }finally{await chatgpt.action('end-user-turn',{requestId}).catch(()=>{});context.active=false;context.turnId=null;context.question=null;context.permission=null;context.controller=null;context.requestId=null;}
  };
 }
-async function createCliBridge({profile,dispatch}){
+async function createCliBridge({profile,dispatch,terminalProfile=profile}){
  const dir=p.join(profile,'cli');fs.mkdirSync(dir,{recursive:true,mode:0o700});
  const nonce=crypto.randomBytes(24).toString('hex'),token=crypto.randomBytes(32).toString('hex');
  const pipe=process.platform==='win32'?'\\\\.\\pipe\\scoreler-'+nonce:p.join(os.tmpdir(),'scoreler-'+nonce+'.sock');
@@ -52,7 +52,7 @@ async function createCliBridge({profile,dispatch}){
   socket.on('data',chunk=>{buffer+=decoder.write(chunk);if(Buffer.byteLength(buffer)>24*1024*1024){socket.destroy();return;}let end;while((end=buffer.indexOf('\n'))>=0){const line=buffer.slice(0,end);buffer=buffer.slice(end+1);let msg;try{msg=JSON.parse(line);}catch{socket.destroy();return;}if(!msg||typeof msg!=='object'||Array.isArray(msg)){socket.destroy();return;}if(!msg||typeof msg!=='object'||Array.isArray(msg)){socket.destroy();return;}if(!authenticated){if(typeof msg.token!=='string'||!(/^[a-f0-9]{64}$/).test(msg.token)||!crypto.timingSafeEqual(Buffer.from(msg.token),Buffer.from(token))){socket.destroy();return;}authenticated=true;socket.setTimeout(0);send({ready:true});continue;}if(!safeId(msg.id)||typeof msg.action!=='string'){socket.destroy();return;}void Promise.resolve().then(()=>dispatch(msg.action,msg.value,context,event=>send({id:msg.id,event}))).then(result=>send({id:msg.id,result}),error=>send({id:msg.id,error:error?.message||'Terminal request failed'}));}});
  });
  await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(pipe,resolve);});if(process.platform!=='win32')fs.chmodSync(pipe,0o600);
- const marker=p.join(dir,'connection.json');fs.writeFileSync(marker,JSON.stringify({protocol:1,pipe,token,pid:process.pid}),{mode:0o600});
- return {close:()=>{if(closed)return;closed=true;for(const socket of sockets)socket.destroy();server.close();try{if(JSON.parse(fs.readFileSync(marker,'utf8')).token===token)fs.unlinkSync(marker);}catch{}if(process.platform!=='win32')try{fs.unlinkSync(pipe);}catch{}}};
+ const markers=[...new Set([dir,p.join(terminalProfile,'cli')])].map(folder=>{fs.mkdirSync(folder,{recursive:true,mode:0o700});const marker=p.join(folder,'connection.json');require('./windows-icon.cjs').atomicWrite(marker,Buffer.from(JSON.stringify({protocol:1,pipe,token,pid:process.pid})));return marker;});
+ return {close:()=>{if(closed)return;closed=true;for(const socket of sockets)socket.destroy();server.close();for(const marker of markers)try{if(JSON.parse(fs.readFileSync(marker,'utf8')).token===token)fs.unlinkSync(marker);}catch{}if(process.platform!=='win32')try{fs.unlinkSync(pipe);}catch{}}};
 }
 module.exports={createCliBridge,createCliDispatcher,modelState,sseEvents};

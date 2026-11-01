@@ -1,5 +1,9 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
-const {installRuntimeBootstrap}=require('./runtime-bootstrap.cjs');
+const {installRuntimeBootstrap,runtimeIcon}=require('./runtime-bootstrap.cjs');
+
+test('new managed runtimes use the saved theme icon rather than replacing it with the default palette',()=>{
+ const home=fs.mkdtempSync(path.join(os.tmpdir(),'scoreler-runtime-icon-')),root=path.join(home,'source');try{assert.equal(runtimeIcon(root,home),path.join(root,'electron/scoreler.ico'));const dir=path.join(home,'study/config');fs.mkdirSync(dir,{recursive:true});fs.writeFileSync(path.join(dir,'appearance-icon.ico'),'fixture');assert.equal(runtimeIcon(root,home),path.join(dir,'appearance-icon.ico'));}finally{fs.rmSync(home,{recursive:true,force:true});}
+});
 test('installs a safe fallback for argument-less launches and preserves unrelated runtime applications',()=>{
  const home=fs.mkdtempSync(path.join(os.tmpdir(),'scoreler-runtime-')),root=path.join(home,'updates','source-'+'a'.repeat(40));
  const resources=path.join(root,'node_modules/electron/dist/resources');

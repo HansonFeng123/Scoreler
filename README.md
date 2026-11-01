@@ -252,6 +252,13 @@ The installed updater downloads public GitHub source without sign-in. Private re
 
 ## Update log
 
+### 1.4.1
+
+- Protect saved email configuration with atomic writes, encrypted backups and recovery instead of silently showing an empty account.
+- Use the Node console runtime for the optional CLI and register an owned Windows Apps shim using native physical paths, including Windows package redirection. Node.js 24+ is required.
+- Recognize exact Windows packaged-profile mirrors for standalone notes while retaining traversal/link checks.
+- Brand newly prepared Windows runtimes with the saved theme icon and keep preview email notifications from registering production shortcuts.
+
 ### 1.4
 
 - Refresh the independent GitHub plugin catalog without updating Scoreler; retain a validated offline cache and require separate review for package installation or updates.

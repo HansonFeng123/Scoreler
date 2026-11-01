@@ -1,6 +1,6 @@
 import {WebContentsView} from 'electron';
 import pluginNetworkTransport from './plugin-network.cjs';
-import {randomUUID} from 'node:crypto';
+import {createHash,randomUUID} from 'node:crypto';
 import {createNetworkPreferences} from './network-preferences.js';
 import {createChatGPTIntegration} from './chatgpt.js';
 import appearanceHelper from './appearance.cjs';
@@ -134,7 +134,8 @@ let serverProcess = null;
 const network=createNetworkPreferences({app,session});
 ipcMain.handle('scoreler-network',async(event,action,value)=>{validateUpdateSender(event);if(event.senderFrame!==mainWindow.webContents.mainFrame)throw Error('Invalid network caller');try{return await network.action(action,value);}catch{throw Error('Could not apply proxy settings. Check the address and connection.');}});
 const chatgpt=createChatGPTIntegration({app,safeStorage,shell,dialog,getWindow:()=>mainWindow,fetch:network.fetch});
-const terminalInstaller=terminalInstall.createCliInstall({profile:app.getPath('userData'),root:app.getAppPath(),executable:process.execPath,version:JSON.parse(readFileSync(join(app.getAppPath(),'package.json'),'utf8')).version,preview:!!process.env.SCORELER_PREVIEW});
+const terminalProfile=process.platform==='win32'&&process.env.LOCALAPPDATA?join(process.env.LOCALAPPDATA,'Scoreler','terminal',createHash('sha256').update(app.getPath('userData')).digest('hex').slice(0,20)):app.getPath('userData');
+const terminalInstaller=terminalInstall.createCliInstall({profile:app.getPath('userData'),terminalProfile,root:app.getAppPath(),executable:process.execPath,version:JSON.parse(readFileSync(join(app.getAppPath(),'package.json'),'utf8')).version,preview:!!process.env.SCORELER_PREVIEW,aliasDirectory:process.platform==='win32'&&process.env.LOCALAPPDATA?join(process.env.LOCALAPPDATA,'Microsoft','WindowsApps'):undefined});
 let terminalBridge;
 async function startTerminalBridge(){
  if(terminalBridge||!terminalInstaller.state().installed&&!process.env.SCORELER_CLI_TEST)return;
@@ -143,7 +144,7 @@ async function startTerminalBridge(){
   if(!response.ok){const error=await response.json().catch(()=>({}));throw Error(error.error||'Scoreler request failed (HTTP '+response.status+')');}
   return stream?response:response.json();
  };
- terminalBridge=await terminalHost.createCliBridge({profile:app.getPath('userData'),dispatch:terminalHost.createCliDispatcher({request,chatgpt,version:terminalInstaller.state().version,getLocale:()=>appearanceStore.read()?.locale})});
+ terminalBridge=await terminalHost.createCliBridge({profile:app.getPath('userData'),terminalProfile,dispatch:terminalHost.createCliDispatcher({request,chatgpt,version:terminalInstaller.state().version,getLocale:()=>appearanceStore.read()?.locale})});
 }
 ipcMain.handle('scoreler-cli',async(event,action)=>{
  validateUpdateSender(event);if(event.senderFrame!==mainWindow.webContents.mainFrame)throw Error('Invalid terminal caller');
@@ -742,7 +743,7 @@ app.whenReady().then(async () => {
 
   ensureConfig();
   studyBrowser=setupStudyBrowser({home:innoHome,getMainWindow:()=>mainWindow,getPort:()=>serverPort});
-  mailIntegration=await setupMail({home:innoHome,token:desktopToken,icon:scorelerIcon,getMainWindow:()=>mainWindow,getPort:()=>serverPort,companion,showMainWindow});
+  mailIntegration=await setupMail({home:innoHome,token:desktopToken,icon:scorelerIcon,getMainWindow:()=>mainWindow,getPort:()=>serverPort,companion,showMainWindow,notificationAPI:timerNotificationAPI});
   openLoadingWindow();
   void startConfiguredOllama();
   startServer(() => {void openMainWindow();companion.start();void startTerminalBridge().catch(()=>{});});
