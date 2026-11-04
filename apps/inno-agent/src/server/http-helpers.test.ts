@@ -21,6 +21,23 @@ async function expectHttpError(promise: Promise<unknown>, statusCode: number): P
 }
 
 describe("readBody", () => {
+	it("preserves Chinese and emoji when UTF-8 characters cross network chunks", async () => {
+		const req = fakeReq();
+		const body = readBody(req);
+		const value = { title: "物理复习 📚", question: "波的叠加" };
+		for (const byte of Buffer.from(JSON.stringify(value))) req.write(Buffer.from([byte]));
+		req.end();
+		await expect(body).resolves.toEqual(value);
+	});
+
+	it("rejects an interrupted upload instead of leaving the route pending", async () => {
+		const req = fakeReq();
+		const body = readBody(req);
+		req.write('{"title":');
+		req.emit("aborted");
+		await expectHttpError(body, 400);
+	});
+
 	it("parses a valid JSON body", async () => {
 		const req = fakeReq();
 		const body = readBody(req);

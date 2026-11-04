@@ -1,6 +1,6 @@
 {
   "name": "scoreler-desktop",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "private": true,
   "description": "Scoreler is a personal AI agent focused on studying.",
   "author": "Inno Agent Contributors",
@@ -16,6 +16,8 @@
     "start": "node scripts/scoreler-dev.mjs",
     "desktop": "npm run build && electron .",
     "test": "vitest run",
+    "test:desktop": "node --test \"scripts/*.test.cjs\" \"scripts/*.test.mjs\" \"electron/*.test.cjs\" \"electron/*.test.js\" \"packages/scoreler-chatgpt/test/*.test.mjs\"",
+    "test:integration": "node scripts/scoreler-smoke.mjs",
     "test:updater": "node --test scripts/source-updater.test.cjs",
     "update:check": "node scripts/source-updater.cjs check",
     "update:apply": "node scripts/source-updater.cjs apply",

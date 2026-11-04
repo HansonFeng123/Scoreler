@@ -1,4 +1,5 @@
 import type { IncomingMessage as HttpReq, ServerResponse } from "node:http";
+import { StringDecoder } from "node:string_decoder";
 
 /**
  * Shared HTTP helpers for the server route domains.
@@ -57,6 +58,7 @@ export function readBody(req: HttpReq, options?: { maxBytes?: number }): Promise
 		}
 
 		let data = "";
+		const decoder = new StringDecoder("utf8");
 		let received = 0;
 		req.on("data", (chunk: Buffer) => {
 			received += chunk.length;
@@ -64,16 +66,18 @@ export function readBody(req: HttpReq, options?: { maxBytes?: number }): Promise
 				tooLarge();
 				return;
 			}
-			data += chunk.toString();
+			data += decoder.write(chunk);
 		});
 		req.on("end", () => {
 			try {
+				data += decoder.end();
 				resolve(data ? JSON.parse(data) : {});
 			} catch (err) {
 				reject(new HttpError(400, "Invalid JSON body"));
 			}
 		});
 		req.on("error", reject);
+		req.on("aborted", () => reject(new HttpError(400, "Request body interrupted")));
 	});
 }
 

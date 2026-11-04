@@ -28,7 +28,7 @@ import { ensureWebAccessConfig, resolvePiAiJitiAliases } from "./web-access-conf
 import { ensurePermissionSystemConfig, INNO_WEB_AUTHORIZER_NAME, resolvePluginFile } from "./permission-system-config.js";
 import { permissionBridge, type PermissionAskDetails } from "./permission-bridge.js";
 import { checkWorkspaceMutationPath } from "./workspace-path-guard.js";
-import { WEB_ACCESS_PROMPT_HINT } from "./system-prompt.js";
+import { TEACHING_ENTRY_PROMPT, WEB_ACCESS_PROMPT_HINT } from "./system-prompt.js";
 import { syncProvidersForSubagents } from "./provider-sync.js";
 import { questionBridge } from "./question-bridge.js";
 import { logger } from "../logger.js";
@@ -292,6 +292,10 @@ export function createInnoExtension(
 		for (const tool of learnerTools) {
 			pi.registerTool(tool);
 		}
+		const learnerToolNames = new Set(learnerTools.map(tool => tool.name));
+		const allowedStudyTool = (name: string) => name.startsWith("student_") ||
+			["web_search", "web_research", "fetch_content", "source_check"].includes(name) ||
+			(isL1Enabled() && learnerToolNames.has(name));
 
 		// 2b. Inno slash commands (web + CLI). Unlike the bundled plugins' TUI
 		// overlay commands, these run headless: the handler expands into a normal
@@ -393,13 +397,11 @@ export function createInnoExtension(
 			}
 		}
 
-		let scorelerCalendarMutations = 0;
 		// 5. Keep built-in file mutations inside the workspace bound to the
 		// active session. PI accepts absolute paths, so cwd alone is not a
 		// sufficient boundary when the model emits a stale parent path.
 		pi.on("tool_call", async (event) => {
-                if (["student_calendar_create", "student_calendar_update"].includes(event.toolName) && scorelerCalendarMutations++ > 0) return { block: true, reason: "For multiple changes, use student_plan_propose and have the student approve it in Calendar." };
-			if (!event.toolName.startsWith("student_") && !["web_search", "web_research", "fetch_content", "source_check"].includes(event.toolName)) return { block: true, reason: "Scoreler uses authorized study tools. Terminal and unrestricted file access are disabled." };
+			if (!allowedStudyTool(event.toolName)) return { block: true, reason: "Scoreler uses authorized study tools. Terminal and unrestricted file access are disabled." };
 			if (event.toolName !== "write" && event.toolName !== "edit") return undefined;
 
 			const requestedPath = event.input.path;
@@ -461,12 +463,12 @@ export function createInnoExtension(
 
 			// 6. Inject L1 context and custom system prompt before each agent turn
 			pi.on("before_agent_start", async (event, ctx) => {
-				scorelerCalendarMutations = 0;
                 const sections: string[] = [SCORELER_PROMPT];
 
 				// Inject the L1 learner context pack (profile + recent events)
 				// unless the learner has turned L1 off in settings.
 				if (isL1Enabled()) {
+					sections.push(TEACHING_ENTRY_PROMPT);
 					const profile = loadProfile(paths.learnerDataDir);
 
 					// If the profile is empty (new user), inject the structured
@@ -551,7 +553,7 @@ export function createInnoExtension(
 
 		// 7. Custom startup header
 		pi.on("session_start", async (_event, ctx) => {
-            pi.setActiveTools(pi.getAllTools().filter(tool => tool.name.startsWith("student_") || ["web_search", "web_research", "fetch_content", "source_check"].includes(tool.name)).map(tool => tool.name));
+            pi.setActiveTools(pi.getAllTools().filter(tool => allowedStudyTool(tool.name)).map(tool => tool.name));
 			if (ctx.hasUI) {
 				ctx.ui.setHeader((_tui, theme) => ({
 					render(_width: number): string[] {

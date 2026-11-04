@@ -21,10 +21,14 @@ export async function handleStudentRoutes(req: IncomingMessage, res: ServerRespo
   if (!url.startsWith('/api/student/')) return false;
   const store = studentStore(dataDir);
   const pathname = url.split('?')[0];
-  const body = async () => await readBody(req, { maxBytes: 30 * 1024 * 1024 }) as Record<string, unknown>;
+  const body = async ():Promise<Record<string,unknown>> => {
+    const value=await readBody(req,{maxBytes:30*1024*1024});
+    if(!value||typeof value!=='object'||Array.isArray(value))throw new StudentError('Expected a JSON object');
+    return value as Record<string,unknown>;
+  };
   try {
     if(pathname==='/api/student/appearance'&&method==='GET'){json(res,200,store.get('meta','appearance')||{selected:null,themes:[]});
-    }else if(pathname==='/api/student/appearance'&&method==='PUT'){const value=appearanceState(await body());store.put('meta',{id:'appearance',...value});json(res,200,value);
+    }else if(pathname==='/api/student/appearance'&&method==='PUT'){const raw=await body();let value;try{value=appearanceState(raw);}catch(error){throw new StudentError((error as Error).message);}store.put('meta',{id:'appearance',...value});json(res,200,value);
     }else if(pathname==='/api/student/feature-layout'&&method==='GET'){json(res,200,featureLayout(store.get('meta','feature-layout')));
     }else if(pathname==='/api/student/feature-layout'&&method==='PUT'){const layout=featureLayout(await body());store.put('meta',{id:'feature-layout',...layout});json(res,200,layout);
     }else if(pathname==='/api/student/dictations'&&method==='GET'){json(res,200,store.list<DictationSheet>('dictations').reverse());
@@ -50,14 +54,14 @@ export async function handleStudentRoutes(req: IncomingMessage, res: ServerRespo
     } else if(method==='GET'&&/^\/api\/student\/videos\/[a-f0-9-]+\/(media|poster|lesson)$/.test(pathname)){
       const parts=pathname.split('/'),id=parts[4],kind=parts[5];const path=videoFile(dataDir,id,kind==='poster'?'poster':kind==='lesson'?'lesson':'mp4');const info=await stat(path);
       const headers:Record<string,string|number>={'Content-Type':kind==='poster'?'image/jpeg':kind==='lesson'?'application/json':'video/mp4','Accept-Ranges':'bytes','Cache-Control':'private, max-age=3600','X-Content-Type-Options':'nosniff'};
-      if(new URL(url,'http://localhost').searchParams.has('download'))headers['Content-Disposition']=`attachment; filename="Scoreler-${id}.${kind==='lesson'?'json':'mp4'}"`;
-      const range=req.headers.range;if(range){const m=/^bytes=(\d*)-(\d*)$/.exec(range);let start=m?.[1]?Number(m[1]):0,end=m?.[2]?Number(m[2]):info.size-1;if(m&&!m[1]&&m[2]){start=Math.max(0,info.size-Number(m[2]));end=info.size-1;}end=Math.min(end,info.size-1);if(!m||!Number.isSafeInteger(start)||!Number.isSafeInteger(end)||start<0||start>end||start>=info.size){res.writeHead(416,{'Content-Range':`bytes */${info.size}`});res.end();return true;}res.writeHead(206,{...headers,'Content-Range':`bytes ${start}-${end}/${info.size}`,'Content-Length':end-start+1});createReadStream(path,{start,end}).pipe(res);}else{res.writeHead(200,{...headers,'Content-Length':info.size});createReadStream(path).pipe(res);}
+      if(new URL(url,'http://localhost').searchParams.has('download'))headers['Content-Disposition']=`attachment; filename="Scoreler-${id}.${kind==='lesson'?'json':kind==='poster'?'jpg':'mp4'}"`;
+      const range=req.headers.range;if(range){const m=/^bytes=(\d*)-(\d*)$/.exec(range);let start=m?.[1]?Number(m[1]):0,end=m?.[2]?Number(m[2]):info.size-1;if(m&&!m[1]&&m[2]){start=Math.max(0,info.size-Number(m[2]));end=info.size-1;}end=Math.min(end,info.size-1);if(!m||(!m[1]&&!m[2])||!Number.isSafeInteger(start)||!Number.isSafeInteger(end)||start<0||start>end||start>=info.size){res.writeHead(416,{'Content-Range':`bytes */${info.size}`});res.end();return true;}res.writeHead(206,{...headers,'Content-Range':`bytes ${start}-${end}/${info.size}`,'Content-Length':end-start+1});createReadStream(path,{start,end}).pipe(res);}else{res.writeHead(200,{...headers,'Content-Length':info.size});createReadStream(path).pipe(res);}
     } else if(method==='POST'&&/^\/api\/student\/videos\/[a-f0-9-]+\/cancel$/.test(pathname)){
       json(res,200,cancelVideo(dataDir,pathname.split('/')[4]));
     } else if(method==='GET'&&pathname==='/api/student/videos'){
       json(res,200,videoRecords(dataDir));
     } else if(method==='GET'&&pathname.startsWith('/api/student/mistake-images/')){
-      const id=pathname.split('/').pop()!;if(!/^[a-f0-9-]+\.(png|jpg|webp|gif)$/.test(id))throw new StudentError('Invalid screenshot');const ext=extname(id).slice(1);res.writeHead(200,{'Content-Type':ext==='jpg'?'image/jpeg':`image/${ext}`,'Cache-Control':'private, max-age=86400','X-Content-Type-Options':'nosniff'});res.end(await readFile(join(dataDir,'mistake-images',id)));
+      const id=pathname.split('/').pop()!;if(!/^[a-f0-9-]+\.(png|jpg|webp|gif)$/.test(id))throw new StudentError('Invalid screenshot');const data=await readFile(join(dataDir,'mistake-images',id));const ext=extname(id).slice(1);res.writeHead(200,{'Content-Type':ext==='jpg'?'image/jpeg':`image/${ext}`,'Cache-Control':'private, max-age=86400','X-Content-Type-Options':'nosniff'});res.end(data);
     } else if (method === 'GET' && pathname === '/api/student/memory') {
       json(res,200,readStudentMemory(dataDir));
     } else if (method === 'PUT' && pathname === '/api/student/memory') {
@@ -94,7 +98,9 @@ export async function handleStudentRoutes(req: IncomingMessage, res: ServerRespo
     } else if (method === 'DELETE' && pathname.startsWith('/api/student/events/')) {
       store.deleteEvent(decodeURIComponent(pathname.split('/').pop()!)); json(res, 200, { ok: true });
     } else if ((method === 'POST' || method === 'PUT') && pathname === '/api/student/mistakes') {
-      const b = await body(); json(res, 200, store.saveMistake(b, typeof b.id === 'string' ? b.id : undefined));
+      const b = await body();
+      if(method==='PUT'&&(typeof b.id!=='string'||!store.get('mistakes',b.id)))throw new StudentError('Mistake not found');
+      json(res, 200, store.saveMistake(b, typeof b.id === 'string' ? b.id : undefined));
     } else if (method === 'DELETE' && pathname.startsWith('/api/student/mistakes/')) {
       store.remove('mistakes', decodeURIComponent(pathname.split('/').pop()!)); json(res, 200, { ok: true });
     } else if (method === 'GET' && pathname === '/api/student/search') {
@@ -126,7 +132,11 @@ export async function handleStudentRoutes(req: IncomingMessage, res: ServerRespo
       json(res,200,store.get('attempts',id) ?? {id,answers:exam.questions.map(()=>''),submitted:false});
     } else { json(res,404,{ error:'Not found' }); }
   } catch (error) {
-    if (error instanceof StudentError) json(res,400,{ error:error.message }); else throw error;
+    if (error instanceof StudentError) json(res,400,{ error:error.message });
+    else if(error instanceof URIError)json(res,400,{error:'Invalid URL encoding'});
+    else if((error as NodeJS.ErrnoException).code==='ENOENT')json(res,404,{error:'File or folder not found'});
+    else if((error as NodeJS.ErrnoException).code==='EEXIST')json(res,400,{error:'A file or folder with this name already exists'});
+    else throw error;
   }
   return true;
 }

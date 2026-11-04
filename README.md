@@ -123,8 +123,11 @@ For a browser-only local server, run `npm start` after building and open the loo
 
 ```powershell
 npm test
-npm run test:updater
+npm run test:desktop
+npm run test:integration
 ```
+
+`test:desktop` includes the Electron helpers, CLI, plugins, updater and ChatGPT client tests. `test:integration` requires a completed build and uses temporary study data and a local synthetic model, including a restart. On Windows, set `$env:SCORELER_TEST_VIDEO='1'` before the integration command to include an actual narrated teaching-video render. Run credential and Electron checks from a normal Windows user session. See the [2026-11-04 verification report](docs/verification-2026-11-04.md) for coverage and limits.
 
 Local Windows packaging is available with `npm run package:win`. It creates local build artifacts; source-repository contents and binary distribution have different licensing considerations. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
@@ -251,6 +254,10 @@ Install the CLI in Settings, open a new terminal, and run `scoreler`. Chat on th
 The installed updater downloads public GitHub source without sign-in. Private repositories use Git Credential Manager for authentication locally; credentials are not saved in the source snapshot or passed as command-line arguments. Enable Automatically prepare updates in Settings to check at startup and every six hours, build new source in the background, and activate it at the next restart. Automatic preparation is off initially. Each update builds in its own version directory. Before activation on restart, Scoreler automatically backs up the existing local profile, then switches the ready marker. If the backup fails, it keeps the previous version. The ready marker changes only after a successful build, so a failed build leaves the previous ready version selected. The installed launcher opens that ready version on subsequent launches. Your study database and configuration remain outside those source directories. Node.js, npm and Git must already be installed; private-repository users need their own authorized GitHub access.
 
 ## Update log
+
+### 1.4.3
+
+- Fix session handling, study records, note validation, media downloads and multilingual request decoding. See the [verification report](docs/verification-2026-11-04.md).
 
 ### 1.4.2
 

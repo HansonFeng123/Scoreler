@@ -38,4 +38,15 @@ async function main(){
   result.ok=true;
  }finally{client.close();}
 }
-main().catch(error=>{result.ok=false;result.error=error.message;process.exitCode=1;}).finally(()=>{bridge?.close();backend?.kill();model?.closeAllConnections();model?.close();fs.writeFileSync(p.join(runtime,'cli-agent-result.json'),JSON.stringify(result,null,2));console.log(JSON.stringify(result));});
+main().catch(error=>{result.ok=false;result.error=error.message;process.exitCode=1;}).finally(async()=>{
+ bridge?.close();
+ if(backend&&backend.exitCode===null){const stopped=new Promise(resolve=>backend.once('exit',resolve));backend.kill();await Promise.race([stopped,sleep(5000)]);}
+ model?.closeAllConnections();if(model)await new Promise(resolve=>model.close(resolve));
+ fs.writeFileSync(p.join(runtime,'cli-agent-result.json'),JSON.stringify(result,null,2));
+ // node-pty's Windows helper can retain a native handle after onExit. The
+ // terminal itself has already been checked for clean exit above; finish this
+ // standalone verification process only after its fixture services are closed
+ // and its result has been written and flushed.
+ if(process.env.SCORELER_CLI_PTY==='1')process.stdout.write(JSON.stringify(result)+'\n',()=>process.exit(process.exitCode||0));
+ else console.log(JSON.stringify(result));
+});

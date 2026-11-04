@@ -32,9 +32,11 @@ import type { RuntimePaths } from "../runtime.js";
 import { ensureDir } from "../storage/file-store.js";
 import type { ChannelRegistry } from "../channels/channel.js";
 import { logger } from "../logger.js";
+import { createTaskQueue, QueueTaskCancelledError } from "./task-queue.js";
+export { QueueTaskCancelledError } from "./task-queue.js";
 
 let _runtime: AgentSessionRuntime | null = null;
-let _queue: Promise<void> = Promise.resolve();
+const enqueue = createTaskQueue();
 let _workspaceDir = "";
 let _currentCwd = "";
 let _configHolder: ConfigHolder | null = null;
@@ -111,14 +113,6 @@ async function switchToSession(sessionPath: string, opts?: { force?: boolean; cw
 	_currentCwd = desiredCwd;
 }
 
-/** Error thrown when a queued task is cancelled before it starts executing. */
-export class QueueTaskCancelledError extends Error {
-	constructor(message = "Queue task was cancelled before it started") {
-		super(message);
-		this.name = "QueueTaskCancelledError";
-	}
-}
-
 export type SessionEditErrorCode = "entry_not_found" | "not_user_message" | "not_active_branch";
 
 export class SessionEditError extends Error {
@@ -130,43 +124,6 @@ export class SessionEditError extends Error {
 
 export function isQueueTaskCancelled(err: unknown): boolean {
 	return err instanceof QueueTaskCancelledError;
-}
-
-function enqueue<T>(task: () => Promise<T>, opts?: { signal?: AbortSignal }): Promise<T> {
-	// A cancelled task must NEVER execute once its slot arrives — otherwise
-	// ops whose caller already gave up (client disconnected / timed out)
-	// would run later in a jumbled order (ghost sessions, surprise session
-	// switches). Cancellation is also EAGER: the returned promise rejects as
-	// soon as the signal fires, so HTTP handlers waiting on a queued op can
-	// answer 409 immediately instead of hanging until the slot frees up.
-	// See https://github.com/hhyqhh/inno-agent/issues/124.
-	return new Promise<T>((resolve, reject) => {
-		const signal = opts?.signal;
-		let settled = false;
-		const onAbort = () => {
-			if (settled) return;
-			settled = true;
-			reject(new QueueTaskCancelledError());
-		};
-		if (signal) {
-			if (signal.aborted) {
-				reject(new QueueTaskCancelledError());
-				return;
-			}
-			signal.addEventListener("abort", onAbort, { once: true });
-		}
-		const guarded = () => {
-			if (signal?.aborted) return Promise.reject(new QueueTaskCancelledError());
-			return task();
-		};
-		const run = _queue.then(guarded, guarded);
-		_queue = run.then(() => undefined, () => undefined);
-		const cleanup = () => signal?.removeEventListener("abort", onAbort);
-		run.then(
-			(value) => { cleanup(); if (!settled) { settled = true; resolve(value); } },
-			(err) => { cleanup(); if (!settled) { settled = true; reject(err); } },
-		);
-	});
 }
 
 /**

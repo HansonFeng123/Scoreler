@@ -1,4 +1,8 @@
 import {it,expect} from 'vitest';import {resizeImage,imageCorners,recognizeShape,hitElement,validDrawing,emptyDrawing} from './drawing.js';
+it('returns false for malformed elements and points and duplicate element IDs',()=>{
+ const element={id:'one',kind:'line',color:'#202124',points:[{x:0,y:0},{x:20,y:20}]};
+ for(const elements of [[null],[undefined],[{...element,points:[null]}],[{...element,points:[{x:'0',y:0}]}],[element,element]])expect(validDrawing({...emptyDrawing(),elements})).toBe(false);
+});
 it('recognizes straight strokes, rectangle outlines and circular or elliptical loops',()=>{expect(recognizeShape([{x:0,y:0},{x:50,y:50},{x:100,y:100}]).kind).toBe('line');const rectangle=[{x:0,y:0},{x:100,y:0},{x:100,y:60},{x:0,y:60},{x:0,y:0}];expect(recognizeShape(rectangle).kind).toBe('rectangle');const loop=(rx:number,ry:number)=>Array.from({length:65},(_,i)=>({x:100+rx*Math.cos(i*Math.PI/32),y:100+ry*Math.sin(i*Math.PI/32)}));const circle=recognizeShape(loop(50,48));expect(circle.kind).toBe('ellipse');expect(circle.points[1].x-circle.points[0].x).toBeCloseTo(circle.points[1].y-circle.points[0].y);const ellipse=recognizeShape(loop(80,30));expect(ellipse.kind).toBe('ellipse');expect(ellipse.points[1].x-ellipse.points[0].x).toBeGreaterThan(ellipse.points[1].y-ellipse.points[0].y);});
 it('selects a stroke only near its path and rejects malformed saved notes',()=>{expect(hitElement({id:'a',kind:'ink',color:'#202124',points:[{x:0,y:0},{x:100,y:100}]},{x:50,y:51})).toBe(true);expect(hitElement({id:'a',kind:'ink',color:'#202124',points:[{x:0,y:0},{x:100,y:100}]},{x:0,y:100})).toBe(false);expect(validDrawing(emptyDrawing())).toBe(true);expect(validDrawing({...emptyDrawing(),elements:[{id:'x',kind:'script',points:[]}]})).toBe(false);});
 

@@ -19,4 +19,13 @@ export function hitElement(e:DrawingElement,p:Point){const a=e.points[0],b=e.poi
  const x=Math.min(a.x,b.x),y=Math.min(a.y,b.y),w=Math.abs(a.x-b.x),h=Math.abs(a.y-b.y);if(e.kind==='rectangle'||e.kind==='image')return p.x>=x-8&&p.x<=x+w+8&&p.y>=y-8&&p.y<=y+h+8;
  return ((p.x-x-w/2)/(w/2+8))**2+((p.y-y-h/2)/(h/2+8))**2<=1;
 }
-export function validDrawing(raw:unknown):raw is DrawingNote{const n=raw as DrawingNote;return !!n&&n.version===1&&n.width===1600&&n.height===1000&&Array.isArray(n.elements)&&n.elements.length<=10000&&n.elements.every(e=>typeof e.id==='string'&&['ink','line','rectangle','ellipse','text','image'].includes(e.kind)&&['#202124','#df3434','#1875df'].includes(e.color)&&Array.isArray(e.points)&&e.points.length>=1&&e.points.length<=20000&&e.points.every(p=>Number.isFinite(p.x)&&Number.isFinite(p.y))&&(e.kind!=='image'||e.points.length===2&&typeof e.imageData==='string'&&e.imageData.length<=6500000&&/^data:image\/(png|jpeg|webp);base64,[a-zA-Z0-9+/=]+$/.test(e.imageData))&&(e.fontSize===undefined||[16,24,32].includes(e.fontSize))&&(e.bold===undefined||typeof e.bold==='boolean')&&(e.text===undefined||typeof e.text==='string'&&e.text.length<=10000));}
+export function validDrawing(raw:unknown):raw is DrawingNote {
+ const n=raw as DrawingNote,ids=new Set<string>();
+ return !!n&&n.version===1&&n.width===1600&&n.height===1000&&Array.isArray(n.elements)&&n.elements.length<=10000&&n.elements.every(e=>
+  !!e&&typeof e==='object'&&typeof e.id==='string'&&!ids.has(e.id)&&!!ids.add(e.id)&&
+  ['ink','line','rectangle','ellipse','text','image'].includes(e.kind)&&['#202124','#df3434','#1875df'].includes(e.color)&&
+  Array.isArray(e.points)&&e.points.length>=1&&e.points.length<=20000&&e.points.every(p=>!!p&&typeof p==='object'&&Number.isFinite(p.x)&&Number.isFinite(p.y))&&
+  (e.kind!=='image'||e.points.length===2&&typeof e.imageData==='string'&&e.imageData.length<=6500000&&/^data:image\/(png|jpeg|webp);base64,[a-zA-Z0-9+/=]+$/.test(e.imageData))&&
+  (e.fontSize===undefined||[16,24,32].includes(e.fontSize))&&(e.bold===undefined||typeof e.bold==='boolean')&&
+  (e.text===undefined||typeof e.text==='string'&&e.text.length<=10000));
+}

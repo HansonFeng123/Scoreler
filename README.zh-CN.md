@@ -116,8 +116,11 @@ npm --workspace inno-agent run build
 node scripts/scoreler-video-build.mjs
 npm --workspace inno-agent-web run build
 npm test
-npm run test:updater
+npm run test:desktop
+npm run test:integration
 ```
+
+`test:desktop` 覆盖 Electron 辅助模块、CLI、插件、更新器及 ChatGPT 客户端；`test:integration` 在构建后运行，使用临时学习数据和本地模拟模型，并验证重启后的持久化。Windows 下可先执行 `$env:SCORELER_TEST_VIDEO='1'`，额外验证真实旁白视频渲染。凭据加密和 Electron 检查需在正常 Windows 用户会话中运行。覆盖范围与限制见 [2026-11-04 验证报告](docs/verification-2026-11-04.md)。
 
 构建后可通过 `npm start` 启动仅浏览器模式，访问输出的本机地址。桌面邮箱、内置浏览器和伙伴集成需要 Electron。本地打包命令为 `npm run package:win`。二进制分发涉及独立的依赖许可要求，参见 [第三方声明](THIRD_PARTY_NOTICES.md)。
 
@@ -217,6 +220,10 @@ npm run update:apply -- --confirm --expected <40位目标提交>
 在设置中安装 CLI，打开新的终端后输入 `scoreler`。左侧聊天，右侧显示今日日程。支持 `/new`、`/model`、`/reasoning`、`/image`、`/file` 和 `/help`。组件随 Scoreler 更新，详见[使用、隐私和限制说明](docs/cli.zh-CN.md)。
 
 ## 更新日志
+
+### 1.4.3
+
+- 修复会话处理、学习记录、笔记校验、媒体下载及多语言请求解码问题。参见[验证报告](docs/verification-2026-11-04.md)。
 
 ### 1.4.2
 

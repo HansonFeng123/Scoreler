@@ -29,6 +29,7 @@ import { serializeFrontmatter } from "../memory/l2/wiki-maintainer.js";
 import { loadEvents, loadProfile, saveProfile } from "../memory/learner/profile-store.js";
 import { createDefaultProfile } from "../memory/learner/types.js";
 import { createInnoExtension } from "./inno-extension.js";
+import { studentStore } from "../scoreler/store.js";
 
 const TARGET = "physics.inclined_plane_acceleration";
 const PREREQUISITE = "physics.force_decomposition";
@@ -43,6 +44,7 @@ afterEach(() => {
 		// with EBUSY. maxRetries covers any residual async handle release.
 		closeL2Memory(join(root, "data", "l2"));
 		closeL3Memory(join(root, "data", "l3"));
+		studentStore(join(root, "data")).close();
 		rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 	}
 });

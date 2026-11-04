@@ -54,7 +54,7 @@ export class StudentStore {
       this.db.exec('BEGIN');try{const subjects=this.list<{id:string;name:string}>('subjects');const labels=new Map(subjects.map(s=>[s.id,s.id==='math-aa'?'Mathematics':s.id==='physics'?'Physics':s.name]));for(const collection of ['events','mistakes','exams'])for(const record of this.list<{id:string;subject?:string}>(collection))if(record.subject&&labels.has(record.subject))this.put(collection,{...record,subject:labels.get(record.subject)});this.db.prepare("DELETE FROM records WHERE collection='subjects'").run();this.put('meta',{id:'subject-registry-removed'});this.db.exec('COMMIT');}catch(e){this.db.exec('ROLLBACK');throw e;}
     }
   }
-  close() { this.db.close(); }
+  close() { this.db.close(); if(stores.get(this.directory)===this)stores.delete(this.directory); }
   transaction<T>(run:()=>T):T {this.db.exec("BEGIN");try{const result=run();this.db.exec("COMMIT");return result;}catch(error){this.db.exec("ROLLBACK");throw error;}}
   proposePlan(title: string, rawEvents: unknown[], sessionId?: string) {
     if (!Array.isArray(rawEvents) || !rawEvents.length) throw new StudentError('A plan needs at least one session');

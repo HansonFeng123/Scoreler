@@ -1371,10 +1371,12 @@ function releaseQueueFromQuestionBlockedTurn(targetSessionId: string): void {
 }
 
 /**
- * Run an enqueue-backed operation with a hard wait bound. If the queue is
+ * Run an enqueue-backed operation with a bound on queue waiting. If the queue is
  * held by a long turn the caller gets a 409 with blocker details instead of
  * hanging for minutes; a client disconnect cancels the still-queued task so
- * it never executes out from under a user who already gave up.
+ * it never executes out from under a user who already gave up. Once started,
+ * an operation must finish and report its real result rather than replying
+ * session_busy while a session mutation continues in the background.
  */
 async function runQueueOpWithTimeout<T>(
 	_req: HttpReq,
