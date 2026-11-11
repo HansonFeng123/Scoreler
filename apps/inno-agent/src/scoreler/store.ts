@@ -65,20 +65,37 @@ export class StudentStore {
     if (!plan) throw new StudentError('Plan not found');
     return this.commitPlan(plan.title,plan.events,id);
   }
-  savePlan(title:string,rawEvents:unknown[]){return this.commitPlan(title,rawEvents);}
-  private commitPlan(title:string,rawEvents:unknown[],planId?:string){
+  savePlan(title:string,rawEvents:unknown[],options?:{rejectOverlappingLessons?:boolean}){
+    return this.commitPlan(title,rawEvents,undefined,options?.rejectOverlappingLessons);
+  }
+  private commitPlan(title:string,rawEvents:unknown[],planId?:string,rejectOverlappingLessons=false){
     text(title,'title',200);if(!Array.isArray(rawEvents)||!rawEvents.length)throw new StudentError('A plan needs at least one session');
     const requested=rawEvents.map(validateEvent);
-    this.db.exec('BEGIN');
-    try {
+    const apply = () => {
       const last=Number(this.db.prepare('SELECT COALESCE(MAX(id),0) AS id FROM activity').get()!.id);
       const fingerprint=(e:Omit<StudyEvent,'id'>)=>JSON.stringify([e.title,e.subject,e.start,e.end,e.kind]);
-      const existing=new Set(this.list<StudyEvent>('events').map(fingerprint));
-      const events:StudyEvent[]=[];for(const e of requested){const key=fingerprint(e);if(existing.has(key))continue;events.push(this.saveEvent(e,undefined,true));existing.add(key);}
+      const current = this.list<StudyEvent>('events');
+      const existing = new Set(current.map(fingerprint));
+      const lessons = rejectOverlappingLessons ? current.filter(event => event.kind === 'lesson') : [];
+      const events: StudyEvent[] = [];
+      for (const event of requested) {
+        const key = fingerprint(event);
+        if (existing.has(key)) continue;
+        if (rejectOverlappingLessons && event.kind === 'lesson'
+          && lessons.some(lesson => lesson.start < event.end && event.start < lesson.end)) {
+          throw new StudentError(`A lesson overlaps ${event.start}. No lessons from this batch were added.`);
+        }
+        const saved = this.saveEvent(event,undefined,true);
+        events.push(saved);
+        existing.add(key);
+        if (rejectOverlappingLessons && saved.kind === 'lesson') lessons.push(saved);
+      }
       this.db.prepare('DELETE FROM activity WHERE id>?').run(last);
       if(events.length)this.log('batch-create',randomUUID(),undefined,events);
-      if(planId)this.remove('plans',planId);this.db.exec('COMMIT');return events;
-    } catch (error) { this.db.exec('ROLLBACK'); throw error; }
+      if(planId)this.remove('plans',planId);
+      return events;
+    };
+    return this.db.isTransaction ? apply() : this.transaction(apply);
   }
 
   list<T>(collection: string): T[] {

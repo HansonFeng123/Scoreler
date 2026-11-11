@@ -40,6 +40,15 @@ const model=createServer(async(req,res)=>{
   if(!toolDone.length)tool='student_overview';
   else if(toolDone.length===1){tool='student_calendar_batch';args={title:'Balanced revision week',events:[{...fixture,title:'Mechanics revision',start:'2026-11-11T16:00:00+08:00',end:'2026-11-11T16:40:00+08:00'},{...fixture,title:'Waves revision',start:'2026-11-12T16:00:00+08:00',end:'2026-11-12T16:40:00+08:00'}]};}
   else reply='Applied the complete schedule directly to your calendar.';
+ }else if(learningRequest&&scenario.includes('SCENARIO_TIMETABLE')){
+  if(!toolDone.length){
+   assert(b.tools.some(t=>t.function.name==='student_calendar_repeat_week'));
+   tool='student_calendar_repeat_week';
+   args={title:'Repeat verified timetable',sourceWeekStart:'2026-11-23',fromDate:'2026-11-30',throughDate:'2027-01-29',timeZone:'Asia/Shanghai',skipDates:['2027-01-01']};
+  }else{
+   assert.match(JSON.stringify(toolDone),/2027-01-29/);
+   reply='Checked the timetable through January 29.';
+  }
  }else if(learningRequest&&scenario.includes('SCENARIO_CLEANUP')){
   if(!toolDone.length){tool='student_overview';args={};}
   else if(toolDone.length===1){assert(JSON.stringify(toolDone).includes(cleanupPlanId));tool='student_calendar_delete';args={id:cleanupEventId};}
@@ -106,6 +115,29 @@ try{
  const planSession=await api('/api/sessions','POST',{});
  const stream=await fetch(base+'/api/chat/stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:planSession.id,clientRequestId:crypto.randomUUID(),prompt:'SCENARIO_PLAN: propose two revision sessions next week.'}),signal:AbortSignal.timeout(90000)});assert(stream.ok);const streamText=await stream.text();assert.match(streamText,/text_delta/);assert.match(streamText,/student_calendar_batch/);
  const applied=await api('/api/student/state');assert.equal(applied.events.length,3,'Bulk schedule applies without approval');assert.equal(applied.plans.length,0);await api('/api/student/undo','POST');assert.equal((await api('/api/student/state')).events.length,1,'One undo removes the whole batch');await api('/api/chat','POST',{sessionId:planSession.id,prompt:'SCENARIO_PLAN: add those two sessions again.'});assert.equal((await api('/api/student/state')).events.length,3);
+
+ const mondayClass={title:'Chemistry · Room 4',subject:'Chemistry',kind:'lesson',completed:false,start:'2026-11-23T08:00:00+08:00',end:'2026-11-23T08:40:00+08:00'};
+ const template=[
+  mondayClass,
+  {...mondayClass,title:'Physics · Room 2',subject:'Physics',start:'2026-11-23T08:50:00+08:00',end:'2026-11-23T09:30:00+08:00'},
+  {...mondayClass,start:'2026-11-27T08:00:00+08:00',end:'2026-11-27T08:40:00+08:00'},
+  {...mondayClass,start:'2026-11-30T08:00:00+08:00',end:'2026-11-30T08:40:00+08:00'},
+ ];
+ const originalLessons=[];
+ for(const lesson of template)originalLessons.push(await api('/api/student/events','POST',lesson));
+ const timetableSession=await api('/api/sessions','POST',{});
+ const repeatTimetable=()=>api('/api/chat','POST',{sessionId:timetableSession.id,prompt:'SCENARIO_TIMETABLE: 将已保存的课表重复安排到 1 月 29 日，跳过元旦。'});
+ assert.match((await repeatTimetable()).response,/January 29/);
+ const lessons=(await api('/api/student/state')).events.filter(event=>event.kind==='lesson');
+ assert.equal(lessons.length,29,'One chat turn saved all nine weeks, excluding the holiday and skipping a duplicate');
+ assert(lessons.some(event=>event.title===mondayClass.title&&event.start==='2027-01-29T00:00:00.000Z'),'The inclusive end date was saved');
+ assert(lessons.some(event=>event.title==='Physics · Room 2'&&event.start==='2026-11-30T00:50:00.000Z'),'Room and break carried over');
+ assert(!lessons.some(event=>event.start.startsWith('2027-01-01')));
+ await repeatTimetable();
+ assert.equal((await api('/api/student/state')).events.filter(event=>event.kind==='lesson').length,29,'Retry is idempotent');
+ await api('/api/student/undo','POST');
+ assert.equal((await api('/api/student/state')).events.filter(event=>event.kind==='lesson').length,4,'One undo preserves the template and pre-existing lesson');
+ for(const lesson of originalLessons)await api(`/api/student/events/${lesson.id}`,'DELETE');
 
  const denied=await fetch(base+'/api/student/events',{method:'POST',headers:{Origin:'https://example.com','Content-Type':'application/json'},body:JSON.stringify(fixture)});assert.equal(denied.status,403);
  const memorySession=await api('/api/sessions','POST',{});await api('/api/chat','POST',{sessionId:memorySession.id,prompt:'SCENARIO_MEMORY: My name is Lin. My semester ends 2027-06-18. Remember these facts.'});assert.equal((await api('/api/student/memory')).length,2);assert(readFileSync(join(home,'data','knowledge','STUDENT.md'),'utf8').includes('Lin'));

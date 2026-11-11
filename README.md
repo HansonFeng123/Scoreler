@@ -255,6 +255,11 @@ The installed updater downloads public GitHub source without sign-in. Private re
 
 ## Update log
 
+### 1.4.5
+
+- Repeat a saved weekly class timetable across the full requested date range in one operation. Keep individual lesson times and room details, skip exact duplicates and specified exceptions, and undo the new lessons in one step.
+- Check coverage before ending a scheduling request. If a lesson conflicts, roll back the batch and report the conflict.
+
 ### 1.4.4
 
 - Add an optional **Open Scoreler when I sign in to Windows** switch in desktop Settings. It is off by default and uses the installed launcher to open the selected version.

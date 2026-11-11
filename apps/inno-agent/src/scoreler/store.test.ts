@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { StudentStore, validateEvent, type StudyEvent } from './store.js';
+import { repeatWeeklyLessons } from './weekly-lessons.js';
 const opened:Array<{store:StudentStore;dir:string}>=[];
 function setup(){const dir=mkdtempSync(join(tmpdir(),'scoreler-test-'));const store=new StudentStore(dir);opened.push({store,dir});return store;}
 afterEach(()=>{for(const {store,dir} of opened.splice(0)){store.close();rmSync(dir,{recursive:true,force:true});}});
@@ -37,6 +38,49 @@ describe('direct calendar batches',()=>{
  it('applies immediately without a pending proposal, and undoes the whole batch',()=>{const s=setup();s.saveEvent({...event,title:'Existing lesson',kind:'lesson'});const added=s.savePlan('Next week',[{...event,start:'2026-11-10T16:00:00+08:00',end:'2026-11-10T16:45:00+08:00'},{...event,start:'2026-11-11T16:00:00+08:00',end:'2026-11-11T16:45:00+08:00'}]);expect(added).toHaveLength(2);expect(s.list('plans')).toHaveLength(0);s.undo();expect(s.list('events')).toHaveLength(1);});
  it('skips exact duplicates and rolls back genuine conflicts',()=>{const s=setup();s.saveEvent(event);expect(s.savePlan('Same',[event])).toHaveLength(0);expect(()=>s.savePlan('Conflict',[{...event,start:'2026-11-02T16:00:00+08:00',end:'2026-11-02T16:45:00+08:00'},{...event,title:'Different'}])).toThrow(/overlap/);expect(s.list('events')).toHaveLength(1);});
  it('does not create default subject records',()=>{expect(setup().list('subjects')).toHaveLength(0);});
+});
+
+describe('repeating weekly lessons', () => {
+  const request = {
+    title: 'Repeat classes', sourceWeekStart: '2026-11-23',
+    fromDate: '2026-11-30', throughDate: '2027-01-31', timeZone: 'Asia/Shanghai',
+  };
+  const lesson = {
+    title: 'Chemistry · Room 4', subject: 'Chemistry', kind: 'lesson',
+    start: '2026-11-23T08:00:00+08:00', end: '2026-11-23T08:40:00+08:00', completed: true,
+  };
+
+  it('rolls back new lessons when a later date overlaps a different existing lesson', () => {
+    const store = setup();
+    store.saveEvent(lesson);
+    store.saveEvent({ ...lesson, title: 'Different class', start: '2026-12-07T08:00:00+08:00', end: '2026-12-07T08:40:00+08:00' });
+    const before = store.activity();
+    expect(() => repeatWeeklyLessons(store, request)).toThrow(/overlaps 2026-12-07/);
+    expect(store.list('events')).toHaveLength(2);
+    expect(store.activity()).toEqual(before);
+  });
+
+  it('rejects invalid dates and time zones, and rejects an all-day source lesson', () => {
+    const store = setup();
+    expect(() => repeatWeeklyLessons(store, { ...request, fromDate: '2026-11-31' })).toThrow(/valid calendar dates/);
+    expect(() => repeatWeeklyLessons(store, { ...request, timeZone: 'Unknown/Zone' })).toThrow(/valid time zone/);
+    store.saveEvent({ ...lesson, start: '2026-11-23T00:00:00+08:00', end: '2026-11-24T00:00:00+08:00' });
+    expect(() => repeatWeeklyLessons(store, request)).toThrow(/all-day lesson/);
+    expect(store.list('events')).toHaveLength(1);
+  });
+
+  it('keeps the same local lesson time across a daylight-saving change', () => {
+    const store = setup();
+    store.saveEvent({ ...lesson, start: '2026-10-26T08:00:00-04:00', end: '2026-10-26T08:40:00-04:00' });
+    const result = repeatWeeklyLessons(store, {
+      ...request, sourceWeekStart: '2026-10-26', fromDate: '2026-11-02',
+      throughDate: '2026-11-02', timeZone: 'America/New_York',
+    });
+    expect(result.created).toBe(1);
+    expect(store.list<StudyEvent>('events')[1]).toMatchObject({
+      title: lesson.title, start: '2026-11-02T13:00:00.000Z', end: '2026-11-02T13:40:00.000Z', completed: false,
+    });
+  });
 });
 
 it('deletes only the selected practice test and its saved attempt',()=>{const store=setup();store.put('exams',{id:'one'});store.put('exams',{id:'two'});store.put('attempts',{id:'one',answers:['answer']});store.put('attempts',{id:'two',answers:['keep']});store.deleteExam('one');expect(store.get('exams','one')).toBeUndefined();expect(store.get('attempts','one')).toBeUndefined();expect(store.get('exams','two')).toBeDefined();expect(store.get('attempts','two')).toBeDefined();expect(()=>store.deleteExam('missing')).toThrow('Assessment not found');});
