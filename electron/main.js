@@ -4,6 +4,7 @@ import {createHash,randomUUID} from 'node:crypto';
 import {createNetworkPreferences} from './network-preferences.js';
 import {createChatGPTIntegration} from './chatgpt.js';
 import appearanceHelper from './appearance.cjs';
+import uiRecovery from './ui-recovery.cjs';
 import runtimeBootstrap from '../scripts/runtime-bootstrap.cjs';
 import windowsShortcut from './windows-shortcut.cjs';
 import timerNotifications from './timer-notifications.cjs';
@@ -21,7 +22,7 @@ import {setupStudyBrowser} from './study-browser.js';
 import { randomBytes } from 'node:crypto';
 import {createCompanion} from './companion.js';
 import { app, BrowserWindow, Tray, Menu, shell, dialog, clipboard, nativeImage, ipcMain, screen, Notification, safeStorage, net, session, protocol } from "electron";
-import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync, unlinkSync } from "node:fs";
 import { spawn, execFile, execFileSync } from "node:child_process";
 import { createServer as createNetServer } from "node:net";
 import { basename, join, dirname } from "node:path";
@@ -41,6 +42,9 @@ if(!hasInstanceLock)app.exit(0);
 try{if(!process.env.SCORELER_PREVIEW)updateState.activatePending(app.getPath('userData'));}catch{dialog.showErrorBox('Scoreler update','The automatic backup failed. The previous version remains selected.');}
 const ready=updateState.read(join(app.getPath('userData'),'updates','ready.json'));
 const managedRoot=updateState.selectedCandidate(app.getPath('userData'),ready,app.getAppPath());
+if (process.platform === 'win32' && app.isPackaged) {
+  process.env.SCORELER_INSTALLED_LAUNCHER = process.execPath;
+}
 if(!process.env.SCORELER_PREVIEW&&managedRoot&&managedRoot.toLowerCase()!==app.getAppPath().toLowerCase()){
  app.releaseSingleInstanceLock();const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;
  const child=spawn(join(managedRoot,'node_modules/electron/dist/electron.exe'),[managedRoot,'--scoreler-profile='+app.getPath('userData')],{cwd:managedRoot,env,detached:true,stdio:'ignore',windowsHide:true});child.unref();app.exit(0);
@@ -84,6 +88,10 @@ const desktopToken = randomBytes(32).toString("hex");
 const serverInstance = randomBytes(16).toString("hex");
 const appearanceStore=appearanceHelper.createAppearanceStore(innoHome,nativeImage);
 if(existsSync(appearanceStore.icon))scorelerIcon=appearanceStore.icon;
+function installedLauncherPath() {
+  return process.env.SCORELER_INSTALLED_LAUNCHER ||
+    join(process.env.LOCALAPPDATA || app.getPath('home'), 'Programs', 'Scoreler', 'Scoreler.exe');
+}
 function repairAppShortcut(){
  if(process.platform!=='win32'||process.env.SCORELER_SMOKE_DIR||app.getPath('userData')!==join(app.getPath('appData'),'scoreler-desktop'))return;
  const options={shell,appData:app.getPath('appData'),profile:app.getPath('userData'),executable:process.execPath,installed:join(process.env.LOCALAPPDATA||app.getPath('home'),'Programs','Scoreler','Scoreler.exe'),root:app.getAppPath(),icon:scorelerIcon};
@@ -109,6 +117,24 @@ function ensureConfig() {
 // ── 全局状态 ──────────────────────────────────────────────────────────────────
 let mainWindow = null;
 function validateUpdateSender(event){if(!mainWindow||event.sender!==mainWindow.webContents||new URL(event.sender.getURL()).origin!==`http://127.0.0.1:${serverPort}`)throw Error('Invalid update caller');}
+ipcMain.handle('scoreler-open-at-login', (event, enabled) => {
+  validateUpdateSender(event);
+  if (event.senderFrame !== mainWindow.webContents.mainFrame) throw Error('Invalid startup settings caller');
+  if (enabled !== undefined && typeof enabled !== 'boolean') throw Error('Invalid startup preference');
+  const launcher = installedLauncherPath();
+  const supported = process.platform === 'win32' &&
+    !process.env.SCORELER_PREVIEW && !process.env.SCORELER_SMOKE_DIR &&
+    !process.env.SCORELER_TEST_NO_SHELL_REGISTRATION &&
+    app.getPath('userData') === join(app.getPath('appData'), 'scoreler-desktop') && existsSync(launcher);
+  if (!supported) return {supported: false, enabled: false};
+  // The installed launcher selects the current release and profile on each login.
+  const path = realpathSync.native(launcher);
+  const name = 'com.scoreler.desktop';
+  if (enabled !== undefined) app.setLoginItemSettings({name, path, openAtLogin: enabled, enabled});
+  const settings = app.getLoginItemSettings({path});
+  return {supported: true, enabled: settings.launchItems.some(item =>
+    item.name === name && item.scope === 'user' && item.enabled && item.args.length === 0)};
+});
 ipcMain.handle('scoreler-app-info',event=>{validateUpdateSender(event);const meta=JSON.parse(readFileSync(join(app.getAppPath(),'package.json'),'utf8'));let commit=meta.scorelerSourceCommit||'';try{commit=JSON.parse(readFileSync(join(app.getAppPath(),'update-origin.json'),'utf8')).commit;}catch{}if(!commit&&!app.isPackaged)try{commit=execFileSync('git',['rev-parse','HEAD'],{cwd:app.getAppPath(),encoding:'utf8',windowsHide:true}).trim();}catch{}return {version:meta.version,commit};});
 ipcMain.handle('scoreler-source-update-check',async event=>{validateUpdateSender(event);const target=await githubUpdates.latest();let version;try{version=await githubUpdates.version(target);const dir=join(app.getPath('userData'),'updates');mkdirSync(dir,{recursive:true});const versions=updateState.read(join(dir,'versions.json'),{});writeFileSync(join(dir,'versions.json'),JSON.stringify({...versions,[target]:version}));}catch{}const meta=JSON.parse(readFileSync(join(app.getAppPath(),'package.json'),'utf8'));let current=meta.scorelerSourceCommit||'';try{current=JSON.parse(readFileSync(join(app.getAppPath(),'update-origin.json'),'utf8')).commit;}catch{}if(!current&&!app.isPackaged)try{current=execFileSync('git',['rev-parse','HEAD'],{cwd:app.getAppPath(),encoding:'utf8',windowsHide:true}).trim();}catch{}if(target!==current&&updatePreferences().automatic){const pending=updateState.read(join(app.getPath('userData'),'updates','pending.json'));if(pending?.commit!==target)startDesktopUpdate(target,'prepare');}return {available:target!==current,target,version,commitsBehind:target===current?0:1};});
 function updatePreferences(){return {automatic:false,useProxy:false,...updateState.read(join(app.getPath('userData'),'updates','preferences.json'),{})};}
@@ -534,16 +560,21 @@ function openMainWindow() {
     });
   }
   if(process.platform==='win32'){
-    const installed=process.env.SCORELER_INSTALLED_LAUNCHER||join(process.env.LOCALAPPDATA||app.getPath('home'),'Programs','Scoreler','Scoreler.exe');
+    const installed=installedLauncherPath();
     mainWindow.setAppDetails({appId:scorelerAppId,appIconPath:scorelerIcon,appIconIndex:0,relaunchDisplayName:'Scoreler',relaunchCommand:!process.env.SCORELER_PREVIEW&&existsSync(installed)?'"'+installed+'"':'"'+process.execPath+'" "'+app.getAppPath()+'" --scoreler-profile="'+app.getPath('userData')+'"'});
     mainWindow.setIcon(scorelerIcon);
   }
   // Local UI HTML must not reuse an index pointing at assets from an older build.
-  let localUiRecovered=false;
-  const recoverLocalUi=()=>{if(localUiRecovered||!mainWindow||mainWindow.isDestroyed())return;localUiRecovered=true;mainWindow.webContents.reloadIgnoringCache();};
-  mainWindow.webContents.on('did-fail-load',(_event,code,_description,_url,isMainFrame)=>{if(isMainFrame&&code!==-3)setTimeout(recoverLocalUi,500);});
-  mainWindow.webContents.on('did-finish-load',()=>{setTimeout(()=>{if(!mainWindow||mainWindow.isDestroyed())return;void mainWindow.webContents.executeJavaScript('!!document.getElementById("root")?.childElementCount').then(rendered=>{if(!rendered)recoverLocalUi();}).catch(()=>recoverLocalUi());},2500);});
-  mainWindow.loadURL(`http://127.0.0.1:${serverPort}`,{extraHeaders:'Cache-Control: no-cache\nPragma: no-cache'});
+  const uiWindow = mainWindow;
+  const appUrl = `http://127.0.0.1:${serverPort}/`;
+  const recovery = uiRecovery.installUiRecovery({
+    webContents: uiWindow.webContents,
+    appUrl,
+    onEvent: event => uiRecovery.recordUiDiagnostic(join(app.getPath('userData'), 'ui-startup.json'), event),
+    onFailure: () => { void uiWindow.loadURL(uiRecovery.uiFailurePage(appUrl)).catch(() => {}); },
+  });
+  uiWindow.once('closed', recovery.dispose);
+  void uiWindow.loadURL(appUrl, uiRecovery.freshLoadOptions).catch(() => {});
 
   // Chromium remembers per-origin page zoom. Reset it for the local app so a
   // previous Ctrl +/- does not compound Windows display scaling on restart.

@@ -255,6 +255,11 @@ The installed updater downloads public GitHub source without sign-in. Private re
 
 ## Update log
 
+### 1.4.4
+
+- Add an optional **Open Scoreler when I sign in to Windows** switch in desktop Settings. It is off by default and uses the installed launcher to open the selected version.
+- Retry when the desktop interface fails to load. If the retry fails, show a recovery screen and save local event codes for diagnosis.
+
 ### 1.4.3
 
 - Fix session handling, study records, note validation, media downloads and multilingual request decoding. See the [verification report](docs/verification-2026-11-04.md).

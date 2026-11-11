@@ -52,6 +52,7 @@ contextBridge.exposeInMainWorld("innoDesktop", {
 });
 
 contextBridge.exposeInMainWorld("scorelerDesktop", {
+ openAtLogin: enabled => ipcRenderer.invoke('scoreler-open-at-login', enabled),
  cli:action=>{if(!['state','install','uninstall'].includes(action))return Promise.reject(Error('Invalid terminal action'));return ipcRenderer.invoke('scoreler-cli',action);},
  onPluginProgress:fn=>{const listener=(_event,value)=>fn(value);ipcRenderer.on('scoreler-plugin-progress',listener);return()=>ipcRenderer.removeListener('scoreler-plugin-progress',listener);},
  plugins:(action,value)=>{if(!['list','refresh','review','import','cancel','install','enable','uninstall','open','resize','close'].includes(action))return Promise.reject(Error('Invalid plugin action'));return ipcRenderer.invoke('scoreler-plugins',action,value);},
